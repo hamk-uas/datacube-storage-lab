@@ -82,7 +82,7 @@ pip install --upgrade zarr
 pip install --upgrade xarray
 ```
 
-and afterwards just:
+and afterwards just: (in this order, so that the module packages don't mask the venv packages)
 
 ```
 module load geoconda
