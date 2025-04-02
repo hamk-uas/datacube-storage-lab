@@ -1,7 +1,9 @@
 # datacube-storage-lab
-Satellite image and weather data intake, format conversion and storage/format load time benchmarks for distributed multimodal ML.
+Satellite image and weather data intake, format conversion and storage/format load time benchmarks for distributed multimodal machine learning (ML).
 
 Work in progress.
+
+There is a need to evaluate storage systems (mainly at CSC) and storage formats for multi-terabyte spatial data modalities for a ML model operating on multimodal patch timeseries data. Here we provide Python code for intake of these data from external sources, for format conversion, and for benchmarking the alternative solutions.
 
 ## Configuration
 
@@ -24,7 +26,7 @@ aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ## Sentinel 2 L1C
 ### Tile list
 
-`sentinel2_l1c/tiles_finland.py` -- Tile ids (strings) of tiles overlapping with Finland land areas or Baltic Sea areas associated with Finland are listed in `tiles_finland` list.
+`sentinel2_l1c/tiles_finland.py` -- Tile ids (strings) of those tiles that intersect with Finland land areas and/or Baltic Sea areas associated with Finland are listed in `tiles_finland` list.
 
 ### Intake SAFE
 
@@ -51,6 +53,41 @@ python sentinel2_l1c/intake_loop.py
 ### Convert SAFE to COG
 
 ### Convert SAFE to Zarr
+
+Zarr scheme:
+* One group for each Sentinel 2 L1C location-tile id (for example 35VLH).
+    - The original overlap of SAFE tiles is maintained.
+    - When the region of interest (patch) intersects with tile overlaps, there will be multiple tiles available to the user to choose from, both having the same orbit number. It would make sense to create a tile
+    + Easy to update when new tiles arrive.
+    + No need to choose Zarr geographical area (such as Finland) beforehand
+* One group for each year
+    + No need to fix starting year
+    - Last chunk will have nodata values when the number of satellite images is not divisible by chunk size (however it probably compresses away well)
+    + This comes after location-tile id group, which is natural in our patch time-series use case.
+* One group per resolution (10m, 20m, 60m)
+* Time index chunk size: 10
+* Band chunk size: the number of bands
+* Y chunk size: 512
+* X chunk size: 512
+
+Building the Zarr is done the same way as updating it with fresh satellite images, one image at a time. Caching by the Zarr library will be used to reduce transfers (to?)/from the remote Zarr. (see https://github.com/zarr-developers/zarr-python/issues/1500)
+
+At CSC, remember to, on the first time:
+
+```
+module load geoconda
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+pip install --upgrade zarr
+pip install --upgrade xarray
+```
+
+and afterwards just:
+
+```
+module load geoconda
+source .venv/bin/activate
+```
 
 ### Time series load time benchmark SAFE/COG/Zarr
 
