@@ -34,7 +34,7 @@ python sentinel2_l1c/intake_cdse_s3.py --tile_id 35VLH --time_start 2024-02-20T0
 
 ### Intake SAFE (loop)
 
-Querying CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results. It is safer to just loop through the days and to make a separate query each day.
+Querying CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results. It is safer to just loop through the days and to make a separate query each day. Intake will eventually be done on a daily basis anyhow so we have less uncertainties always doing it that way.
 
 `sentinel2_l1c/intake_loop.py` -- Download images for year 2024 for tile 35VLH, with each day queried separately.
 
@@ -50,6 +50,18 @@ python sentinel2_l1c/intake_loop.py
 
 ### Time series load time benchmark SAFE/COG/Zarr
 
+## Authors
 
+Olli Niemitalo (Olli.Niemitalo@hamk.fi), Otto Rosenberg
 
+## License
 
+Licensed under the MIT license. We are probably happy to help if you need a different open license.
+
+## Copyright
+
+Copyright 2025 HAMK Häme University of Applied Sciences
+
+## Acknowledgements
+
+The work was supported by the Research Council of Finland funding decision 353076, Digital solutions to foster climate-smart agricultural transition (Digi4CSA). Development and testing were partially done on the CSC – IT Center for Science, Finland supercomputer Puhti.
