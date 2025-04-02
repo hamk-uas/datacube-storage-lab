@@ -22,9 +22,13 @@ aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ## Sentinel 2 L1C
+### Tile list
+
+`sentinel2_l1c/tiles_finland.py` -- Tile ids (strings) of tiles overlapping with Finland land areas or Baltic Sea areas associated with Finland are listed in `tiles_finland` list.
+
 ### Intake SAFE
 
-`python sentinel2_l1c/intake_cdse_s3.py` -- Download all images from a time range for a given tile using CDSE STAC API and CDSE S3 API.
+`sentinel2_l1c/intake_cdse_s3.py` -- Download all images from a time range for a given tile using CDSE STAC API and CDSE S3 API.
 
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
