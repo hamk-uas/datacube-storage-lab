@@ -3,7 +3,7 @@ Satellite image and weather data intake, format conversion and storage/format lo
 
 Work in progress.
 
-There is a need to evaluate storage systems (mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for a ML model operating on multimodal patch timeseries data. Here we provide Python code for intake of these data from external sources, for format conversion, and for benchmarking the alternative solutions.
+There is a need to evaluate storage systems (mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for a ML model operating on multimodal geodata patch timeseries. Here we provide Python code for intake of these data from external sources, for format conversion, and for benchmarking the alternative solutions.
 
 ## Configuration
 
