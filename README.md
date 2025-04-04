@@ -1,21 +1,53 @@
 # datacube-storage-lab
-Satellite image and weather data intake, format conversion and storage/format load time benchmarks for distributed multimodal machine learning (ML).
 
 Work in progress.
 
-There is a need to evaluate storage systems (mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for a ML model operating on multimodal geodata patch timeseries. Here we provide Python code for intake of these data from external sources, for format conversion, and for benchmarking the alternative solutions.
+There is a need to evaluate storage systems (for us, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for ML models operating on multimodal patch geodata time series. Here we provide Python code for intake of these data from external sources, for format conversion, and for benchmarking alternative storage solutions.
+
+## Prerequisites
+
+We assume Python 3.11 or later.
+
+### Local
+
+For running locally, install dependencies:
+
+TODO: add all dependencies.
+
+```
+pip install zarr xarray
+```
+
+### CSC Puhti
+
+On CSC Puhti, load the module dependency and create a Python venv with upgraded packages:
+
+```
+module load geoconda
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+pip install --upgrade zarr xarray
+```
+
+Never mind the error "wrf-python 1.3.4.1 requires basemap" as long as you get a "Successfully installed" last line about xarray and zarr.
+
+On successive jobs you can use the venv again: (in this order, so that the module packages don't mask the venv packages):
+
+```
+module load geoconda
+source .venv/bin/activate
+```
 
 ## Configuration
 
-Configure the [ESA Copernicus Data Space Ecosystem (CDSE) S3 API](https://documentation.dataspace.copernicus.eu/APIs/S3.html) in `~/.aws/configure`:
+Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.aws/config` under a "cdse" profile:
 
 ```
 [profile cdse]
 endpoint_url = https://eodata.dataspace.copernicus.eu
-region = default
 ```
 
-Configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your key in place of the x's:
+For the "cdse" profile, configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the x's:
 
 ```
 [cdse]
@@ -35,7 +67,7 @@ aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
 ```
-python sentinel2_l1c/intake_cdse_s3.py --tile_id 35VLH --time_start 2024-02-20T00:00:00Z time_end 2024-02-21T00:00:00Z
+python sentinel2_l1c/intake_cdse_s3.py --tile_id 35VLH --time_start 2024-02-21T00:00:00Z time_end 2024-02-22T00:00:00Z
 ```
 
 ### Intake SAFE (loop)
@@ -71,23 +103,6 @@ Zarr scheme:
 * X chunk size: 512
 
 Building the Zarr is done the same way as updating it with fresh satellite images, one image at a time. Caching by the Zarr library will be used to reduce transfers (to?)/from the remote Zarr. (see https://github.com/zarr-developers/zarr-python/issues/1500)
-
-At CSC, remember to, on the first time:
-
-```
-module load geoconda
-python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-pip install --upgrade zarr
-pip install --upgrade xarray
-```
-
-and afterwards just: (in this order, so that the module packages don't mask the venv packages)
-
-```
-module load geoconda
-source .venv/bin/activate
-```
 
 ### Time series load time benchmark SAFE/COG/Zarr
 
