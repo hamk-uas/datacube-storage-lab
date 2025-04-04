@@ -56,6 +56,49 @@ aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ## Sentinel 2 L1C
+
+The Python scripts in the `sentinel2_l1c` folder handle intake and conversions:
+
+```
+ESA CDSE S3 SAFE ---------------> Local SAFE --------------> Local COG
+                intake_cdse_s3.py          \ safe_to_cog.py
+                by intake_loop.py           \
+                                             --------------> Local Zarr
+                                             safe_to_zarr.py
+```
+
+For benchmarking an S3 storage, first manually copy the data to S3. For CSC Allas:
+
+TODO finalize
+
+```
+s3cmd put 
+```
+
+For CSC Puhti, in the above diagram, the "local" storage system for intake should be the project scratch (/scratch/project_xxxxxxx). For benchmarking local NVMe storage, the Slurm batch script should first copy the files to NVMe, for example (fill in your user name and project number in place of the x's):
+
+TODO finalize
+
+```shell
+#SBATCH --account=project_xxxxxxx
+#SBATCH --job-name=dataload
+#SBATCH --output=/scratch/project_xxxxxxx/run_%A.txt
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=40
+#SBATCH --mem=80G
+#SBATCH --partition=small
+#SBATCH --gres=nvme:750
+#SBATCH --time=3:00:00
+
+cd /scratch/project_xxxxxxx
+module load geoconda
+source /users/xxxxxxxx/datacube-storage-lab/.venv/bin/activate
+rsync -r /scratch/project_xxxxxxx/sentinel-s2-l1c-safe $LOCAL_SCRATCH
+rsync -r /scratch/project_xxxxxxx/sentinel-s2-l1c-cogs $LOCAL_SCRATCH
+rsync -r /scratch/project_xxxxxxx/sentinel-s2-l1c-zarr $LOCAL_SCRATCH
+python3 /users/xxxxxxxx/datacube-storage-lab/sentinel2_l1c/patch_timeseries_benchmark.py . $LOCAL_SCRATCH http://a3s.fi
+```
+
 ### Tile list
 
 `sentinel2_l1c/tiles_finland.py` -- Tile ids (strings) of those tiles that intersect with Finland land areas and/or Baltic Sea areas associated with Finland are listed in `tiles_finland` list.
