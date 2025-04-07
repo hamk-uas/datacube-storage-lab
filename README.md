@@ -2,7 +2,7 @@
 
 Work in progress.
 
-There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for machine learning (ML) models operating on multimodal patch geodata time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
+There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
 
 Data storage benchmark process diagram:
 
@@ -42,7 +42,7 @@ pip install zarr xarray
 
 ### CSC Puhti
 
-For running on CSC Puhti, this document assumes that the present repository is cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`, and that the Allas storage service is available to your project. If you clone the repository another to location, modify the paths given here accordingly.
+For running on CSC Puhti, this document assumes that the present repository is cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`, and that the Allas storage service is available to your project. If you clone the repository to another location, modify the paths given here accordingly.
 
 Load the module dependencies and create a Python venv with a few upgraded packages:
 
@@ -84,7 +84,7 @@ DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 
 ### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
 
-Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.aws/config` under a "cdse" profile:
+To use it as a primary source, Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.aws/config` under a "cdse" profile:
 
 ```
 [profile cdse]
@@ -101,6 +101,8 @@ aws_secret_access_key = <CDSE_SECRET_KEY>
 
 ## Sentinel 2 L1C
 
+For Sentinel 2 Level-1C products, we use the free ESA Copernicus Data Space Ecosystem (CDSE) APIS: STAC for tile-based searches and the S3 as the primary source of the data. We do not benchmark the CDSE S3 API because download quota limitations would prevent its use in the intended machine learning use case.
+
 The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying to 1) the network drive, 2) a compute node's Temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) is done as follows:
 
 ```mermaid
@@ -116,26 +118,32 @@ graph LR;
     D--<code>Manual copy</code>-->H(S3 Zarr);
 ```
 
+The scripts should be launched from the repo root, for example:
+
+```
+python -m sentinel2_l1c.intake_loop
+```
+
 ### Intake SAFE
 
-`sentinel2_l1c/intake_cdse_s3.py` -- Download all images within a time range for a given tile using the CDSE STAC API and CDSE S3 API.
+`sentinel2_l1c.intake_cdse_s3` -- Download all images within a time range for a given tile using the CDSE STAC API and CDSE S3 API.
 
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
 ```
-python sentinel2_l1c/intake_cdse_s3.py --tile_id 35VLH --time_start 2024-02-21T00:00:00Z time_end 2024-02-22T00:00:00Z
+python -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z time_end 2024-02-22T00:00:00Z
 ```
 
 ### Intake SAFE (loop)
 
 Querying CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
 
-`sentinel2_l1c/intake_loop.py` -- Download images for year 2024 for tile 35VLH, with each day queried separately.
+`sentinel2_l1c.intake_loop` -- Download images for year 2024 for tile 35VLH, with each day queried separately.
 
 Example:
 
 ```
-python sentinel2_l1c/intake_loop.py
+python -m sentinel2_l1c.intake_loop
 ```
 
 ### Convert SAFE to COG
