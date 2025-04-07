@@ -16,7 +16,7 @@ graph LR
     A(Primary source)--Intake-->P("Network drive (CSC Puhti project scratch)")
     P--Format conversion-->B
     B--Manual copy-->C("S3 (CSC Allas)")
-    B--Scripted copy-->D("Temp storage (CSC Puhti node NVMe)")
+    B--Scripted copy-->D("Temp storage (CSC Puhti compute node NVMe)")
     B-->E(Random patch data load benchmark)
     C-->E
     D-->E
