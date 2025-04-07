@@ -4,6 +4,8 @@ Work in progress.
 
 There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for machine learning (ML) models operating on multimodal patch geodata time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
 
+Data storage benchmark process diagram:
+
 ```mermaid
 graph LR
     subgraph Storage alternatives
@@ -20,9 +22,9 @@ graph LR
     D-->E
 ```
 
-The storage systems that are compared are 1) a network drive (project scratch on CSC Puhti), an S3 object storage (CSC Allas) that mirrors the local storage, and a temp storage such as a compute node's local NVMe drive that is populated with data from the local storage. Different storage formats are also compared.
+The storage systems that are compared are 1) a network drive (project scratch on CSC Puhti), 2) an S3 object storage (CSC Allas) that mirrors the local storage, and 3) a temp storage (CSC Puhti compute node's local NVMe) that is populated with data from the local storage. Different storage formats are also compared.
 
-The use case that the benchmarking emulates is loading of randomly located patch time series for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile. Therefore, a temp storage need not be as large as the full data. Intake may store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best.
+The use case that the benchmarking emulates is loading of randomly located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile. Therefore, a temp storage need not be as large as the full data. Intake may store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best.
 
 ## Prerequisites and configuration
 
