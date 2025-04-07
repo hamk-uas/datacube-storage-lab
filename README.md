@@ -13,8 +13,8 @@ graph LR
         C("S3 (CSC Allas)")
         D("Temp storage (CSC Puhti node NVMe)")
     end
-    A(Primary source)--Intake-->B
-    B--Format conversion-->B
+    A(Primary source)--Intake-->P("Network drive (CSC Puhti project scratch)")
+    P--Format conversion-->B
     B--Manual copy-->C("S3 (CSC Allas)")
     B--Scripted copy-->D("Temp storage (CSC Puhti node NVMe)")
     B-->E(Random patch data load benchmark)
