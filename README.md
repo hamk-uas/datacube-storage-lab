@@ -107,11 +107,11 @@ The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. 
 
 ```mermaid
 graph LR;
-    A(ESA CDSE S3 SAFE)--<code>intake_cdse_s3.py</code> by <code>intake_loop.py</code>-->B(Network drive SAFE);
+    A(ESA CDSE S3 SAFE)--<code>intake_loop</code>-->B(Network drive SAFE);
     B--<code>Scripted copy</code>--->J(Temp SAFE);
     B--<code>Manual copy</code>--->I(S3 SAFE);    
-    B--<code>safe_to_cog.py</code>-->C(Network drive COG);
-    B--<code>safe_to_zarr.py</code>-->D(Network drive Zarr);
+    B--<code>safe_to_cog</code>-->C(Network drive COG);
+    B--<code>safe_to_zarr</code>-->D(Network drive Zarr);
     C--<code>Scripted copy</code>-->E(Temp COG);
     D--<code>Scripted copy</code>-->F(Temp Zarr);
     C--<code>Manual copy</code>-->G(S3 COG);
