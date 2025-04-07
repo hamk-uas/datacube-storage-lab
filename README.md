@@ -2,7 +2,27 @@
 
 Work in progress.
 
-There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for machine learning (ML) models operating on multimodal patch geodata time series. In this repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage solutions.
+There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for machine learning (ML) models operating on multimodal patch geodata time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
+
+```mermaid
+graph LR
+    subgraph Storage alternatives
+        B("Network drive (CSC Puhti project scratch)")
+        C("S3 (CSC Allas)")
+        D("Temp storage (CSC Puhti node NVMe)")
+    end
+    A(Primary source)--Intake-->B
+    B--Format conversion-->B
+    B--Manual copy-->C("S3 (CSC Allas)")
+    B--Scripted copy-->D("Temp storage (CSC Puhti node NVMe)")
+    B-->E(Random patch data load benchmark)
+    C-->E
+    D-->E
+```
+
+The storage systems that are compared are 1) a network drive (project scratch on CSC Puhti), an S3 object storage (CSC Allas) that mirrors the local storage, and a temp storage such as a compute node's local NVMe drive that is populated with data from the local storage. Different storage formats are also compared.
+
+The use case that the benchmarking emulates is loading of randomly located patch time series for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile. Therefore, a temp storage need not be as large as the full data. Intake may store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best.
 
 ## Prerequisites and configuration
 
@@ -20,7 +40,7 @@ pip install zarr xarray
 
 ### CSC Puhti
 
-On CSC Puhti, the present repository should be cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`.
+For running on CSC Puhti, this document assumes that the present repository is cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`, and that the Allas storage service is available to your project. If you clone the repository another to location, modify the paths given here accordingly.
 
 Load the module dependencies and create a Python venv with a few upgraded packages:
 
@@ -33,7 +53,7 @@ source .venv/bin/activate
 pip install --upgrade zarr xarray
 ```
 
-There may be some errors but it's OK as long as you get a "Successfully installed" last line about the upgraded packages.
+There may be some errors but that's OK as long as you get a "Successfully installed" last line about the upgraded packages.
 
 The Allas mode will persist on successive jobs and you can also just use the same venv again (after module loads so that module packages don't mask venv packages):
 
