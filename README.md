@@ -22,9 +22,9 @@ graph LR
     D-->E
 ```
 
-The storage systems that are compared are 1) a network drive (project scratch on CSC Puhti), 2) an S3 object storage (CSC Allas) that mirrors the local storage, and 3) a temp storage (CSC Puhti compute node's local NVMe) that is populated with data from the local storage. Different storage formats are also compared.
+The storage systems that are compared are 1) a network drive (project scratch on CSC Puhti), 2) an S3 object storage (CSC Allas) that mirrors the network drive, and 3) a temp storage (CSC Puhti compute node's local NVMe) that is populated with data from the network drive. Different storage formats are also compared.
 
-The use case that the benchmarking emulates is loading of randomly located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile. Therefore, a temp storage need not be as large as the full data. Intake may store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best.
+The use case that the benchmarking emulates is loading of randomly-located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile. Therefore, a temp storage need not be as large as the full data. Intake may store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best.
 
 ## Prerequisites and configuration
 
@@ -65,20 +65,21 @@ module load geoconda
 source .venv/bin/activate
 ```
 
-### Folder configuration
+### Folder and S3 configuration
 
-In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying and S3 profile and data folders, by filling in your choice of paths. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number):
+In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile and data folders/buckets. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number):
 
 ```
-DSLAB_S2L1C_LOCAL_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
-DSLAB_S2L1C_LOCAL_COGS_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cogs
-DSLAB_S2L1C_LOCAL_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
+DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
+DSLAB_S2L1C_NETWORK_COGS_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cogs
+DSLAB_S2L1C_NETWORK_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
 DSLAB_S2L1C_TEMP_SAFE_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_safe"
 DSLAB_S2L1C_TEMP_COGS_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_cogs"
 DSLAB_S2L1C_TEMP_ZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr"
-DSLAB_S2L1C_S3_SAFE_PATH="https://a3s.fi/sentinel2_l1c_safe"
-DSLAB_S2L1C_S3_COGS_PATH="https://a3s.fi/sentinel2_l1c_cogs"
-DSLAB_S2L1C_S3_ZARR_PATH="https://a3s.fi/sentinel2_l1c_zarr"
+DSLAB_S2L1C_S3_PROFILE=s3allas
+DSLAB_S2L1C_S3_SAFE_BUCKET=sentinel2_l1c_safe
+DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
+DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 ```
 
 ### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
@@ -100,7 +101,7 @@ aws_secret_access_key = <CDSE_SECRET_KEY>
 
 ## Sentinel 2 L1C
 
-The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying to Local (typically a network directory), a computing node's Temp (typically fast NVMe storage on a computing node), and S3 (CSC Allas) is done as follows:
+The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying to 1) the network drive, 2) a compute node's Temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) is done as follows:
 
 ```mermaid
 graph LR;
@@ -127,7 +128,7 @@ python sentinel2_l1c/intake_cdse_s3.py --tile_id 35VLH --time_start 2024-02-21T0
 
 ### Intake SAFE (loop)
 
-Querying CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day. Intake will eventually be done on a daily basis anyhow so we have less uncertainties always doing it that way.
+Querying CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
 
 `sentinel2_l1c/intake_loop.py` -- Download images for year 2024 for tile 35VLH, with each day queried separately.
 
@@ -171,7 +172,7 @@ s3cmd put ..............
 
 ### Benchmark load times
 
-On CSC Puhti, for benchmarking local NVMe storage, the Slurm batch script below first copies the files to NVMe. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
+On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm batch script below first copies the files to the NVMe. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
 
 ```shell
 #SBATCH --account=project_<PROJECT_NUMBER>
@@ -184,13 +185,13 @@ On CSC Puhti, for benchmarking local NVMe storage, the Slurm batch script below 
 #SBATCH --gres=nvme:750
 #SBATCH --time=3:00:00
 
-cd /scratch/project_<PROJECT_NUMBER>
+cd /users/<USERNAME>/datacube-storage-lab
 module load geoconda
-source /users/<USERNAME>/datacube-storage-lab/.venv/bin/activate
-rsync -r /scratch/project_<PROJECT_NUMBER>/sentinel-s2-l1c-safe $LOCAL_SCRATCH
-rsync -r /scratch/project_<PROJECT_NUMBER>/sentinel-s2-l1c-cogs $LOCAL_SCRATCH
-rsync -r /scratch/project_<PROJECT_NUMBER>/sentinel-s2-l1c-zarr $LOCAL_SCRATCH
-python3 /users/<USERNAME>/datacube-storage-lab/sentinel2_l1c/patch_timeseries_benchmark.py
+source ./.venv/bin/activate
+rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH
+rsync -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ $DSLAB_S2L1C_TEMP_COGS_PATH
+rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH
+python3 ./sentinel2_l1c/patch_timeseries_benchmark.py
 ```
 
 ## Authors
