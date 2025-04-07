@@ -4,7 +4,7 @@ Work in progress.
 
 There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for machine learning (ML) models operating on multimodal patch geodata time series. In this repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage solutions.
 
-## Prerequisites
+## Prerequisites and configuration
 
 We assume Python 3.11 or later.
 
@@ -43,7 +43,7 @@ module load geoconda
 source .venv/bin/activate
 ```
 
-## Folder configuration
+### Folder configuration
 
 In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying and S3 profile and data folders, by filling in your choice of paths. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number):
 
@@ -59,7 +59,7 @@ DSLAB_S2L1C_S3_COGS_PATH="https://a3s.fi/sentinel2_l1c_cogs"
 DSLAB_S2L1C_S3_ZARR_PATH="https://a3s.fi/sentinel2_l1c_zarr"
 ```
 
-## Copernicus Data Space Ecosystem (CDSE) S3 API
+### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
 
 Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.aws/config` under a "cdse" profile:
 
