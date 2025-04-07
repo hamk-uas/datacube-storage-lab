@@ -2,7 +2,7 @@
 
 Work in progress.
 
-There is a need to evaluate storage systems (for us, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for ML models operating on multimodal patch geodata time series. Here we provide Python code for intake of these data from external sources, for format conversion, and for benchmarking alternative storage solutions.
+There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for machine learning (ML) models operating on multimodal patch geodata time series. In this repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage solutions.
 
 ## Prerequisites
 
@@ -20,25 +20,46 @@ pip install zarr xarray
 
 ### CSC Puhti
 
-On CSC Puhti, load the module dependency and create a Python venv with upgraded packages:
+On CSC Puhti, the present repository should be cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`.
+
+Load the module dependencies and create a Python venv with a few upgraded packages:
 
 ```
+module load allas
+allas-conf --mode S3
 module load geoconda
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 pip install --upgrade zarr xarray
 ```
 
-Never mind the error "wrf-python 1.3.4.1 requires basemap" as long as you get a "Successfully installed" last line about xarray and zarr.
+There may be some errors but it's OK as long as you get a "Successfully installed" last line about the upgraded packages.
 
-On successive jobs you can use the venv again: (in this order, so that the module packages don't mask the venv packages):
+The Allas mode will persist on successive jobs and you can also just use the same venv again (after module loads so that module packages don't mask venv packages):
 
 ```
+module load allas
 module load geoconda
 source .venv/bin/activate
 ```
 
-## Configuration
+## Folder configuration
+
+In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying and S3 profile and data folders, by filling in your choice of paths. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number):
+
+```
+DSLAB_S2L1C_LOCAL_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
+DSLAB_S2L1C_LOCAL_COGS_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cogs
+DSLAB_S2L1C_LOCAL_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
+DSLAB_S2L1C_TEMP_SAFE_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_safe"
+DSLAB_S2L1C_TEMP_COGS_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_cogs"
+DSLAB_S2L1C_TEMP_ZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr"
+DSLAB_S2L1C_S3_SAFE_PATH="https://a3s.fi/sentinel2_l1c_safe"
+DSLAB_S2L1C_S3_COGS_PATH="https://a3s.fi/sentinel2_l1c_cogs"
+DSLAB_S2L1C_S3_ZARR_PATH="https://a3s.fi/sentinel2_l1c_zarr"
+```
+
+## Copernicus Data Space Ecosystem (CDSE) S3 API
 
 Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.aws/config` under a "cdse" profile:
 
@@ -47,65 +68,34 @@ Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.
 endpoint_url = https://eodata.dataspace.copernicus.eu
 ```
 
-For the "cdse" profile, configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the x's:
+For the "cdse" profile, configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the placeholders `<CDSE_ACCESS_KEY>` and `<CDSE_SECRET_KEY>`:
 
 ```
 [cdse]
-aws_access_key_id = xxxxxxxxxxxxxxxxxxxx
-aws_secret_access_key = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+aws_access_key_id = <CDSE_ACCESS_KEY>
+aws_secret_access_key = <CDSE_SECRET_KEY>
 ```
 
 ## Sentinel 2 L1C
 
-The Python scripts in the `sentinel2_l1c` folder handle intake and conversions:
+The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying to Local (typically a network directory), a computing node's Temp (typically fast NVMe storage on a computing node), and S3 (CSC Allas) is done as follows:
 
+```mermaid
+graph LR;
+    A(ESA CDSE S3 SAFE)--<code>intake_cdse_s3.py</code> by <code>intake_loop.py</code>-->B(Local SAFE);
+    B--<code>Scripted copy</code>--->J(Temp SAFE);
+    B--<code>Manual copy</code>--->I(S3 SAFE);    
+    B--<code>safe_to_cog.py</code>-->C(Local COG);
+    B--<code>safe_to_zarr.py</code>-->D(Local Zarr);
+    C--<code>Scripted copy</code>-->E(Temp COG);
+    D--<code>Scripted copy</code>-->F(Temp Zarr);
+    C--<code>Manual copy</code>-->G(S3 COG);
+    D--<code>Manual copy</code>-->H(S3 Zarr);
 ```
-ESA CDSE S3 SAFE ---------------> Local SAFE --------------> Local COG
-                intake_cdse_s3.py          \ safe_to_cog.py
-                by intake_loop.py           \
-                                             --------------> Local Zarr
-                                             safe_to_zarr.py
-```
-
-For benchmarking an S3 storage, first manually copy the data to S3. For CSC Allas:
-
-TODO finalize
-
-```
-s3cmd put 
-```
-
-For CSC Puhti, in the above diagram, the "local" storage system for intake should be the project scratch (/scratch/project_xxxxxxx). For benchmarking local NVMe storage, the Slurm batch script should first copy the files to NVMe, for example (fill in your user name and project number in place of the x's):
-
-TODO finalize
-
-```shell
-#SBATCH --account=project_xxxxxxx
-#SBATCH --job-name=dataload
-#SBATCH --output=/scratch/project_xxxxxxx/run_%A.txt
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=40
-#SBATCH --mem=80G
-#SBATCH --partition=small
-#SBATCH --gres=nvme:750
-#SBATCH --time=3:00:00
-
-cd /scratch/project_xxxxxxx
-module load geoconda
-source /users/xxxxxxxx/datacube-storage-lab/.venv/bin/activate
-rsync -r /scratch/project_xxxxxxx/sentinel-s2-l1c-safe $LOCAL_SCRATCH
-rsync -r /scratch/project_xxxxxxx/sentinel-s2-l1c-cogs $LOCAL_SCRATCH
-rsync -r /scratch/project_xxxxxxx/sentinel-s2-l1c-zarr $LOCAL_SCRATCH
-python3 /users/xxxxxxxx/datacube-storage-lab/sentinel2_l1c/patch_timeseries_benchmark.py . $LOCAL_SCRATCH http://a3s.fi
-```
-
-### Tile list
-
-`sentinel2_l1c/tiles_finland.py` -- Tile ids (strings) of those tiles that intersect with Finland land areas and/or Baltic Sea areas associated with Finland are listed in `tiles_finland` list.
 
 ### Intake SAFE
 
-`sentinel2_l1c/intake_cdse_s3.py` -- Download all images from a time range for a given tile using CDSE STAC API and CDSE S3 API.
+`sentinel2_l1c/intake_cdse_s3.py` -- Download all images within a time range for a given tile using the CDSE STAC API and CDSE S3 API.
 
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
@@ -147,7 +137,39 @@ Zarr scheme:
 
 Building the Zarr is done the same way as updating it with fresh satellite images, one image at a time. Caching by the Zarr library will be used to reduce transfers (to?)/from the remote Zarr. (see https://github.com/zarr-developers/zarr-python/issues/1500)
 
-### Time series load time benchmark SAFE/COG/Zarr
+### Copy data to S3
+
+For benchmarking an S3 storage, first manually copy the data to S3. For CSC Allas:
+
+TODO finalize
+
+```
+s3cmd put ..............
+```
+
+### Benchmark load times
+
+On CSC Puhti, for benchmarking local NVMe storage, the Slurm batch script below first copies the files to NVMe. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
+
+```shell
+#SBATCH --account=project_<PROJECT_NUMBER>
+#SBATCH --job-name=dataload
+#SBATCH --output=/scratch/project_<PROJECT_NUMBER>/dataload_%A.txt
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=40
+#SBATCH --mem=80G
+#SBATCH --partition=small
+#SBATCH --gres=nvme:750
+#SBATCH --time=3:00:00
+
+cd /scratch/project_<PROJECT_NUMBER>
+module load geoconda
+source /users/<USERNAME>/datacube-storage-lab/.venv/bin/activate
+rsync -r /scratch/project_<PROJECT_NUMBER>/sentinel-s2-l1c-safe $LOCAL_SCRATCH
+rsync -r /scratch/project_<PROJECT_NUMBER>/sentinel-s2-l1c-cogs $LOCAL_SCRATCH
+rsync -r /scratch/project_<PROJECT_NUMBER>/sentinel-s2-l1c-zarr $LOCAL_SCRATCH
+python3 /users/<USERNAME>/datacube-storage-lab/sentinel2_l1c/patch_timeseries_benchmark.py
+```
 
 ## Authors
 
