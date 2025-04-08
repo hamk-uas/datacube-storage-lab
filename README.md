@@ -8,7 +8,7 @@ Data storage benchmark process diagram:
 
 ```mermaid
 graph LR
-    subgraph Storage alternatives
+    subgraph Storage alternatives
         B("Network drive (CSC Puhti project scratch)")
         C("S3 (CSC Allas)")
         D("Temp storage (CSC Puhti node NVMe)")
@@ -103,11 +103,20 @@ aws_secret_access_key = <CDSE_SECRET_KEY>
 
 For Sentinel 2 Level-1C products, we use the free ESA Copernicus Data Space Ecosystem (CDSE) APIS: STAC for tile-based searches and the S3 as the primary source of the data. We do not benchmark the CDSE S3 API because download quota limitations would prevent its use in the intended machine learning use case.
 
-The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying to 1) the network drive, 2) a compute node's Temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) is done as follows:
+The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying/format conversion to 1) the network drive, 2) a compute node's Temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) and benchmarking is done as follows:
 
 ```mermaid
 graph LR;
     A(ESA CDSE S3 SAFE)--<code>intake_loop</code>-->B(Network drive SAFE);
+    B-->K(Random patch data load benchmark)
+    C-->K
+    D-->K
+    E-->K
+    F-->K
+    G-->K
+    H-->K
+    I-->K
+    J-->K
     B--<code>Scripted copy</code>--->J(Temp SAFE);
     B--<code>Manual copy</code>--->I(S3 SAFE);    
     B--<code>safe_to_cog</code>-->C(Network drive COG);
@@ -115,7 +124,18 @@ graph LR;
     C--<code>Scripted copy</code>-->E(Temp COG);
     D--<code>Scripted copy</code>-->F(Temp Zarr);
     C--<code>Manual copy</code>-->G(S3 COG);
-    D--<code>Manual copy</code>-->H(S3 Zarr);
+    D--<code>Manual copy</code>-->H(S3 Zarr);    
+    subgraph Storage and format alternatives
+        B
+        C
+        D
+        E
+        F
+        G
+        H
+        I
+        J
+    end
 ```
 
 The scripts should be launched from the repo root, for example:
