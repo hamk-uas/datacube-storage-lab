@@ -32,12 +32,19 @@ We assume Python 3.11 or later.
 
 ### Local
 
-For running locally, install dependencies:
-
-TODO: add all dependencies.
+For running locally in Ubuntu Linux, install dependencies:
 
 ```
-pip install zarr xarray
+sudo add-apt-repository ppa:ubuntugis/ppa
+sudo apt update
+sudo apt-get install python-is-python3 python3-pip
+sudo apt-get install gdal-bin libgdal-dev
+````
+
+and pip packages (specifying the GDAL version you got from the above, if needed):
+
+```
+pip install numpy zarr xarray pystac_client boto3 tenacity gdal==3.8.4
 ```
 
 ### CSC Puhti
@@ -55,7 +62,7 @@ source .venv/bin/activate
 pip install --upgrade zarr xarray
 ```
 
-There may be some errors but that's OK as long as you get a "Successfully installed" last line about the upgraded packages.
+There may be some errors but that's OK as long as you get a `Successfully installed` last line about the upgraded packages.
 
 The Allas mode will persist on successive jobs and you can also just use the same venv again (after module loads so that module packages don't mask venv packages):
 
@@ -64,6 +71,26 @@ module load allas
 module load geoconda
 source .venv/bin/activate
 ```
+
+### Locally configure CSC Allas S3
+
+For local use of CSC Allas S3 from your local machine, copy the credentials in `<USERNAME>@puhti.csc.fi:~/.aws/credentials` to the local file `~/.aws/credentials`, changing the heading `[default]` to `[s3allas]`. The result should look like the following, with your access key and public key in place of the placeholders `<ALLAS_ACCESS_KEY>` and `<ALLAS_SECRET_KEY>`:
+
+```
+[s3allas]
+AWS_ACCESS_KEY_ID=<ALLAS_ACCESS_KEY>
+AWS_SECRET_ACCESS_KEY=<ALLAS_SECRET_KEY>
+AWS_DEFAULT_REGION = regionOne
+```
+
+Update the local file `~/.aws/config` to include a profile for Allas:
+
+```
+[profile s3allas]
+endpoint_url = a3s.fi
+```
+
+If necessary, you can rename `s3allas` to something else. Then rename it also when setting `DSLAB_S2L1C_S3_PROFILE` in the next subsection.
 
 ### Folder and S3 configuration
 
@@ -82,16 +109,22 @@ DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 ```
 
+Verify that the following command lists these environment variables (if not, try opening a new the terminal):
+
+```shell
+env |grep DSLAB_
+```
+
 ### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
 
-To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source, configure its endpoint in `~/.aws/config` under a "cdse" profile:
+To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source, configure its endpoint in `~/.aws/config` under a `cdse` profile:
 
 ```
 [profile cdse]
 endpoint_url = https://eodata.dataspace.copernicus.eu
 ```
 
-For the "cdse" profile, configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the placeholders `<CDSE_ACCESS_KEY>` and `<CDSE_SECRET_KEY>`:
+For the `cdse` profile, configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the placeholders `<CDSE_ACCESS_KEY>` and `<CDSE_SECRET_KEY>`:
 
 ```
 [cdse]

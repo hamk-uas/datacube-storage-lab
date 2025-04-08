@@ -12,8 +12,8 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from osgeo import gdal
 
 s3_session = boto3.Session(profile_name='cdse')
-s3_resource = s3_session.resource('s3')#, endpoint_url="https://eodata.dataspace.copernicus.eu")
-s3_client = s3_session.client('s3')#, endpoint_url="https://eodata.dataspace.copernicus.eu")
+s3_resource = s3_session.resource('s3')
+s3_client = s3_session.client('s3')
 
 @retry(wait=wait_fixed(2), stop=stop_after_attempt(100))
 def get_stac_response(start, end, tile_id):
