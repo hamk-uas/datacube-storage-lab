@@ -84,7 +84,7 @@ DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 
 ### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
 
-To use it as a primary source, Configure the ESA Copernicus Data Space Ecosystem (CDSE) S3 API endpoint in `~/.aws/config` under a "cdse" profile:
+To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source, configure its endpoint in `~/.aws/config` under a "cdse" profile:
 
 ```
 [profile cdse]
