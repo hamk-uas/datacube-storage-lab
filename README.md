@@ -8,7 +8,7 @@ Data storage benchmark process diagram:
 
 ```mermaid
 graph LR
-    subgraph Storage alternatives
+    subgraph Storage and format alternatives
         B("Network drive (CSC Puhti project scratch)")
         C("S3 (CSC Allas)")
         D("Temp storage (CSC Puhti node NVMe)")
@@ -39,23 +39,28 @@ sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt update
 sudo apt-get install python-is-python3 python3-pip
 sudo apt-get install gdal-bin libgdal-dev
+sudo apt-get install s3cmd
 ````
 
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```
-pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal
+pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient
 ```
 
 ### CSC Puhti
 
 For running on CSC Puhti, this document assumes that the present repository is cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`, and that the Allas storage service is available to your project. If you clone the repository to another location, modify the paths given here accordingly.
 
-Load the module dependencies and create a Python venv with a few upgraded packages:
+Configure Allas:
 
 ```
 module load allas
 allas-conf --mode S3
+```
+
+Choose your CSC project when prompted. Then continue to load the module dependencies and create a Python venv with a few upgraded packages:
+```
 module load geoconda
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
@@ -74,23 +79,41 @@ source .venv/bin/activate
 
 ### Local configuration for CSC Allas S3
 
-For use of CSC Allas S3 from your local machine, copy the credentials in `<USERNAME>@puhti.csc.fi:~/.aws/credentials` to the local file `~/.aws/credentials`, changing the heading `[default]` to `[s3allas]`. The result should look like the following, with your access key and public key in place of the placeholders `<ALLAS_ACCESS_KEY>` and `<ALLAS_SECRET_KEY>`:
+Follow [CSC's instructions](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd) on *Configuring S3 connection on local computer*. Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
+
+Move `~/.s3cfg` to `~/.s3allas`:
 
 ```
-[s3allas]
-AWS_ACCESS_KEY_ID=<ALLAS_ACCESS_KEY>
-AWS_SECRET_ACCESS_KEY=<ALLAS_SECRET_KEY>
-AWS_DEFAULT_REGION = regionOne
+mv ~/.s3cfg ~/.s3allas
 ```
 
-Update the local file `~/.aws/config` to include a profile for Allas:
+Edit `~/.aws/credentials` and change the heading `[default]` to `[s3allas]`.
+
+Edit `~/.aws/config` and add a profile for Allas:
 
 ```
 [profile s3allas]
 endpoint_url = a3s.fi
 ```
 
-If necessary, you can rename `s3allas` to something else. Then rename it also when setting `DSLAB_S2L1C_S3_PROFILE` in the next subsection.
+If necessary, you can rename `s3allas` (all occurrences in the above) to something else. If you do so, then correspondingly editthe value of the `DSLAB_S2L1C_S3_PROFILE` environment variable in the next subsection.
+
+### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
+
+To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source, configure its endpoint in `~/.aws/config` under a `cdse` profile. Edit the file and add:
+
+```
+[profile cdse]
+endpoint_url = https://eodata.dataspace.copernicus.eu
+```
+
+For the `cdse` profile, configure your CDSE S3 API credentials by editing `~/.aws/credentials` and by adding the following, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the placeholders `<CDSE_ACCESS_KEY>` and `<CDSE_SECRET_KEY>`:
+
+```
+[cdse]
+aws_access_key_id = <CDSE_ACCESS_KEY>
+aws_secret_access_key = <CDSE_SECRET_KEY>
+```
 
 ### Folder and S3 configuration
 
@@ -115,24 +138,7 @@ Verify that the following command lists these environment variables (if not, try
 env |grep DSLAB_
 ```
 
-### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
-
-To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source, configure its endpoint in `~/.aws/config` under a `cdse` profile:
-
-```
-[profile cdse]
-endpoint_url = https://eodata.dataspace.copernicus.eu
-```
-
-For the `cdse` profile, configure your CDSE S3 API credentials in `~/.aws/credentials`, filling in your access key and secret key (see [CDSE S3 API docs](https://documentation.dataspace.copernicus.eu/APIs/S3.html) on creating credentials) in place of the placeholders `<CDSE_ACCESS_KEY>` and `<CDSE_SECRET_KEY>`:
-
-```
-[cdse]
-aws_access_key_id = <CDSE_ACCESS_KEY>
-aws_secret_access_key = <CDSE_SECRET_KEY>
-```
-
-### Running
+## Running individual modules
 
 The Python modules in this repository typically have a `__main__` function and can therefore be launched from command line. In order to make the `.env` in the repo root findable by a module, the command line should be run from the repo root. For example, to run the module `sentinel2_l1c.intake_cdse_s3_year` which has source code in `sentinel2_l1c/intake_cdse_s3_year.py`:
 
@@ -181,6 +187,23 @@ graph LR;
     end
 ```
 
+The standard workflow is:
+1. Sentinel 2 L1C SAFE intake (slow!)
+    ```
+    python -m sentinel2_l1c.intake_cdse_s3_year   
+    ```
+2. Convert SAFE to COG and Zarr (slow!)
+    ```
+    python -m sentinel2_l1c.convert_safe_to_cog
+    python -m sentinel2_l1c.convert_safe_to_zarr
+    ```
+3. Manually create S3 buckets for the data
+    ```
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COGS_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    ```
+
 ### Intake SAFE
 
 To intake Sentinel 2 L1C images for a long time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` described in the next section.
@@ -195,7 +218,7 @@ Command line arguments:
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
 ```
-python -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z time_end 2024-02-22T00:00:00Z
+python -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
 ```
 
 ### Intake SAFE (year)
