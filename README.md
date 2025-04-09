@@ -24,7 +24,7 @@ graph LR
 
 The storage systems that are compared are 1) a network drive (project scratch on CSC Puhti), 2) an S3 object storage (CSC Allas) that mirrors the network drive, and 3) a temp storage (CSC Puhti compute node's local NVMe) that is populated with data from the network drive. Different storage formats are also compared.
 
-The use case that the benchmarking emulates is loading of randomly-located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile. Therefore, a temp storage need not be as large as the full data. Intake may store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best.
+The use case that the benchmarking emulates is loading of randomly-located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile, or perhaps two tiles. Therefore, the temp storage need not be as large as the full data. Eventually, in machine learning training and serving, intake should store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best in the current benchmarking.
 
 ## Prerequisites and configuration
 
@@ -41,10 +41,10 @@ sudo apt-get install python-is-python3 python3-pip
 sudo apt-get install gdal-bin libgdal-dev
 ````
 
-and pip packages (specifying the GDAL version you got from the above, if needed):
+and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```
-pip install numpy zarr xarray pystac_client boto3 tenacity gdal==3.8.4
+pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal
 ```
 
 ### CSC Puhti
@@ -72,9 +72,9 @@ module load geoconda
 source .venv/bin/activate
 ```
 
-### Locally configure CSC Allas S3
+### Local configuration for CSC Allas S3
 
-For local use of CSC Allas S3 from your local machine, copy the credentials in `<USERNAME>@puhti.csc.fi:~/.aws/credentials` to the local file `~/.aws/credentials`, changing the heading `[default]` to `[s3allas]`. The result should look like the following, with your access key and public key in place of the placeholders `<ALLAS_ACCESS_KEY>` and `<ALLAS_SECRET_KEY>`:
+For use of CSC Allas S3 from your local machine, copy the credentials in `<USERNAME>@puhti.csc.fi:~/.aws/credentials` to the local file `~/.aws/credentials`, changing the heading `[default]` to `[s3allas]`. The result should look like the following, with your access key and public key in place of the placeholders `<ALLAS_ACCESS_KEY>` and `<ALLAS_SECRET_KEY>`:
 
 ```
 [s3allas]
@@ -94,7 +94,7 @@ If necessary, you can rename `s3allas` to something else. Then rename it also wh
 
 ### Folder and S3 configuration
 
-In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile and data folders/buckets. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number):
+In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile and data folders/buckets. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number, which you should fill in):
 
 ```
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
@@ -109,7 +109,7 @@ DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 ```
 
-Verify that the following command lists these environment variables (if not, try opening a new the terminal):
+Verify that the following command lists these environment variables (if not, try opening a new terminal):
 
 ```shell
 env |grep DSLAB_
@@ -132,15 +132,25 @@ aws_access_key_id = <CDSE_ACCESS_KEY>
 aws_secret_access_key = <CDSE_SECRET_KEY>
 ```
 
+### Running
+
+The Python modules in this repository typically have a `__main__` function and can therefore be launched from command line. In order to make the `.env` in the repo root findable by a module, the command line should be run from the repo root. For example, to run the module `sentinel2_l1c.intake_cdse_s3_year` which has source code in `sentinel2_l1c/intake_cdse_s3_year.py`:
+
+```
+python -m sentinel2_l1c.intake_cdse_s3_year
+```
+
+The documentation for each module can be found below.
+
 ## Sentinel 2 L1C
 
 For Sentinel 2 Level-1C products, we use the free ESA Copernicus Data Space Ecosystem (CDSE) APIS: STAC for tile-based searches and the S3 as the primary source of the data. We do not benchmark the CDSE S3 API because download quota limitations would prevent its use in the intended machine learning use case.
 
-The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying/format conversion to 1) the network drive, 2) a compute node's Temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) and benchmarking is done as follows:
+The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying/format conversion to 1) the network drive, 2) a compute node's temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) and benchmarking is done as follows:
 
 ```mermaid
 graph LR;
-    A(ESA CDSE S3 SAFE)--<code>intake_loop</code>-->B(Network drive SAFE);
+    A(ESA CDSE S3 SAFE)--<code>intake_cdse_s3_year</code>-->B(Network drive SAFE);
     B-->K(Random patch data load benchmark)
     C-->K
     D-->K
@@ -171,15 +181,16 @@ graph LR;
     end
 ```
 
-The scripts should be launched from the repo root, for example:
-
-```
-python -m sentinel2_l1c.intake_loop
-```
-
 ### Intake SAFE
 
-`sentinel2_l1c.intake_cdse_s3` -- Download all images within a time range for a given tile using the CDSE STAC API and CDSE S3 API.
+To intake Sentinel 2 L1C images for a long time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` described in the next section.
+
+`python -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
+
+Command line arguments:
+* `time_start <STRING>` — Start time in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default:  `2024-02-21T00:00:00Z`
+* `time_end <STRING>` — End time (not included) in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default: `2024-02-22T00:00:00Z`
+* `tile_id <STRING>` — Tile identifier, default: `35VLH`
 
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
@@ -187,16 +198,21 @@ Example: Download all images from a single tile 35VLH from a single UTC day 2024
 python -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z time_end 2024-02-22T00:00:00Z
 ```
 
-### Intake SAFE (loop)
+### Intake SAFE (year)
 
-Querying CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
+Querying the CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
 
-`sentinel2_l1c.intake_loop` -- Download images for year 2024 for tile 35VLH, with each day queried separately.
+`python -m sentinel2_l1c.intake_cdse_s3_year` — Download images for a full UTC year for the given tile, by looping over UTC days.
 
-Example:
+Command line arguments:
+* `--year_start <INT>` — Start year, default: `2024`
+* `--year_end <INT>` — End year (not included), default: `2025`
+* `--tile_id <STRING>` — Tile identifier, default: `35VLH`
+
+Example: Download images for UTC year 2024 for tile 35VLH:
 
 ```
-python -m sentinel2_l1c.intake_loop
+python -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --tile_id 35VLH
 ```
 
 ### Convert SAFE to COG
@@ -223,7 +239,7 @@ Building the Zarr is done the same way as updating it with fresh satellite image
 
 ### Copy data to S3
 
-For benchmarking an S3 storage, first manually copy the data to S3. For CSC Allas:
+For benchmarking S3 storage, first manually copy the data to S3. For CSC Allas:
 
 TODO finalize
 

@@ -11,6 +11,11 @@ import boto3
 from tenacity import retry, stop_after_attempt, wait_fixed
 from osgeo import gdal
 
+from dotenv import load_dotenv
+load_dotenv()  # loads from .env in current directory
+
+import os
+
 s3_session = boto3.Session(profile_name='cdse')
 s3_resource = s3_session.resource('s3')
 s3_client = s3_session.client('s3')
@@ -75,7 +80,7 @@ def get_stac_response(start, end, tile_id):
     print(response)
     return json.loads(response)
 
-def download_safe_items(items, safe_folder="./safe"):
+def download_safe_items(items, safe_folder=os.getenv("DSLAB_S2L1C_NETWORK_SAFE_PATH", ".")):
     os.makedirs(safe_folder, exist_ok=True)
     for item_index, item in enumerate(items):
         s3_product = item["assets"]["PRODUCT"]["alternate"]["s3"]["href"]
