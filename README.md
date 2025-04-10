@@ -79,7 +79,7 @@ source .venv/bin/activate
 
 ### Local configuration for CSC Allas S3
 
-Follow [CSC's instructions](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd) on *Configuring S3 connection on local computer*. Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
+If you use CSC Allas but want to run the workflow outside CSC Puhti, follow [CSC's instructions](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd) on *Configuring S3 connection on local computer*. Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
 
 Move `~/.s3cfg` to `~/.s3allas`:
 
@@ -131,6 +131,8 @@ DSLAB_S2L1C_S3_SAFE_BUCKET=sentinel2_l1c_safe
 DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 ```
+
+If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>] and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
 
 Verify that the following command lists these environment variables (if not, try opening a new terminal):
 
