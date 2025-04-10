@@ -132,7 +132,7 @@ DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 ```
 
-If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>] and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
+If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>]` and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
 
 Verify that the following command lists these environment variables (if not, try opening a new terminal):
 
@@ -199,12 +199,17 @@ The standard workflow is:
     python -m sentinel2_l1c.convert_safe_to_cog
     python -m sentinel2_l1c.convert_safe_to_zarr
     ```
-3. Manually create S3 buckets for the data
+3. Manually create S3 buckets for the data in different formats and copy the data there.
     ```
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COGS_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ s3://$DSLAB_S2L1C_S3_COGS_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
     ```
+
+4. Benchmark: TODO...
 
 ### Intake SAFE
 
@@ -242,35 +247,21 @@ python -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --
 
 ### Convert SAFE to COG
 
+TODO
+
 ### Convert SAFE to Zarr
 
-Zarr scheme:
-* One group for each Sentinel 2 L1C location-tile id (for example 35VLH).
-    - The original overlap of SAFE tiles is maintained.
-    - When the region of interest (patch) intersects with tile overlaps, there will be multiple tiles available to the user to choose from, both having the same orbit number. It would make sense to create a tile
-    + Easy to update when new tiles arrive.
-    + No need to choose Zarr geographical area (such as Finland) beforehand
-* One group for each year
-    + No need to fix starting year
-    - Last chunk will have nodata values when the number of satellite images is not divisible by chunk size (however it probably compresses away well)
-    + This comes after location-tile id group, which is natural in our patch time-series use case.
-* One group per resolution (10m, 20m, 60m)
-* Time index chunk size: 10
-* Band chunk size: the number of bands
-* Y chunk size: 512
-* X chunk size: 512
+`python -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments.
 
-Building the Zarr is done the same way as updating it with fresh satellite images, one image at a time. Caching by the Zarr library will be used to reduce transfers (to?)/from the remote Zarr. (see https://github.com/zarr-developers/zarr-python/issues/1500)
+The conversion is not Dask-parallelized at SAFE level but Zarr may have its own internal parallelization. TODO: check.
 
-### Copy data to S3
+Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays reside inside nested "groups" in a Zarr "store". We will have a Zarr group hierarchy (in root to branch order): tile, year, band group.
 
-For benchmarking S3 storage, first manually copy the data to S3. For CSC Allas:
+Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, and x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
 
-TODO finalize
-
-```
-s3cmd put ..............
-```
+* 10 m resolution: 1, max, 512, 512 
+* 20 m resolution: 1, max, 256, 256
+* 60 m resolution: 1, max, 128, 128
 
 ### Benchmark load times
 
@@ -290,11 +281,13 @@ On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm ba
 cd /users/<USERNAME>/datacube-storage-lab
 module load geoconda
 source ./.venv/bin/activate
-rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH
-rsync -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ $DSLAB_S2L1C_TEMP_COGS_PATH
-rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH
-python3 ./sentinel2_l1c/patch_timeseries_benchmark.py
+rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
+rsync -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ $DSLAB_S2L1C_TEMP_COGS_PATH/
+rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
+python3 -m sentinel2_l1c.patch_timeseries_benchmark
 ```
+
+TODO: local
 
 ## Authors
 
