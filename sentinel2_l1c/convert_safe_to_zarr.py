@@ -5,6 +5,8 @@ import numpy as np
 import zarr
 from pathlib import Path
 import time
+from dotenv import load_dotenv
+load_dotenv()  # loads from .env in current directory
 
 if int(zarr.__version__.split(".")[0]) < 3:
     raise ImportError("zarr version 3 or higher is required. Current version: {zarr.__version__}")
@@ -37,7 +39,7 @@ def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], zarr
                     safe_time = safe_name.split(sep="_")[2]
                     utc_time = f"{safe_time[:4]}-{safe_time[4:6]}-{safe_time[6:8]}T{safe_time[9:11]}:{safe_time[11:13]}:{safe_time[13:]}Z"
                     print(utc_time)  # For example "2024-02-16T09:50:29Z"
-                    granule_folder = (safe_folder / "GRANULE").glob('*')[0]
+                    granule_folder = next((safe_folder / "GRANULE").glob('*'))
                     # Loop over band groups
                     for band_group, band_group_dict in band_groups.items():
                         print("Band group:", band_group)

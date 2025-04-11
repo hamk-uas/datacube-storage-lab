@@ -37,7 +37,7 @@ For running locally in Ubuntu Linux, install dependencies:
 ```
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt update
-sudo apt-get install python-is-python3 python3-pip
+sudo apt-get install python3-pip
 sudo apt-get install gdal-bin libgdal-dev
 sudo apt-get install s3cmd
 ````
@@ -45,7 +45,7 @@ sudo apt-get install s3cmd
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```
-pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo
+pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray
 ```
 
 ### CSC Puhti
@@ -117,7 +117,7 @@ aws_secret_access_key = <CDSE_SECRET_KEY>
 
 ### Folder and S3 configuration
 
-In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile and data folders/buckets. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number, which you should fill in):
+In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile, data folders/buckets, and a result folder where timestamped result json files will be created by the benchmark. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number, which you should fill in):
 
 ```
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
@@ -130,6 +130,7 @@ DSLAB_S2L1C_S3_PROFILE=s3allas
 DSLAB_S2L1C_S3_SAFE_BUCKET=sentinel2_l1c_safe
 DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
+DSLAB_BENCHMARK_RESULTS_FOLDER=/scratch/project_<PROJECT_NUMBER>/dslab_benchmark_results
 ```
 
 If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>]` and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
@@ -145,7 +146,7 @@ env |grep DSLAB_
 The Python modules in this repository typically have a `__main__` function and can therefore be launched from command line. In order to make the `.env` in the repo root findable by a module, the command line should be run from the repo root. For example, to run the module `sentinel2_l1c.intake_cdse_s3_year` which has source code in `sentinel2_l1c/intake_cdse_s3_year.py`:
 
 ```
-python -m sentinel2_l1c.intake_cdse_s3_year
+python3 -m sentinel2_l1c.intake_cdse_s3_year
 ```
 
 The documentation for each module can be found below.
@@ -190,20 +191,23 @@ graph LR;
 ```
 
 The standard workflow is:
-1. Sentinel 2 L1C SAFE intake (slow!)
+1. Sentinel 2 L1C SAFE intake: (slow!)
     ```
-    python -m sentinel2_l1c.intake_cdse_s3_year   
+    python3 -m sentinel2_l1c.intake_cdse_s3_year   
     ```
-2. Convert SAFE to COG and Zarr (slow!)
+2. Convert SAFE to COG and Zarr: (slow!)
     ```
-    python -m sentinel2_l1c.convert_safe_to_cog
-    python -m sentinel2_l1c.convert_safe_to_zarr
+    python3 -m sentinel2_l1c.convert_safe_to_cog
+    python3 -m sentinel2_l1c.convert_safe_to_zarr
     ```
-3. Manually create S3 buckets for the data in different formats and copy the data there. (slow!)
+3. Manually create S3 buckets for the data in different formats:
     ```
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COGS_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    ```
+4. Manually copy the data to the S3 buckets: (slow!)
+    ```
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ s3://$DSLAB_S2L1C_S3_COGS_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
@@ -211,14 +215,14 @@ The standard workflow is:
 
 4. Benchmark:
     ```
-    TODO
+    python3 -m sentinel2_l1c.benchmark_patch_load
     ```
 
 ### Intake SAFE
 
 To intake Sentinel 2 L1C images for a lengthy time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` for yearly intake, described in the next section.
 
-`python -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
+`python3 -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
 
 Command line arguments:
 * `time_start <STRING>` — Start time in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default:  `2024-02-21T00:00:00Z`
@@ -228,14 +232,14 @@ Command line arguments:
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
 ```
-python -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
+python3 -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
 ```
 
 ### Intake SAFE (year)
 
 Querying the CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
 
-`python -m sentinel2_l1c.intake_cdse_s3_year` — Download images for a full UTC year for the given tile, by looping over UTC days.
+`python3 -m sentinel2_l1c.intake_cdse_s3_year` — Download images for a full UTC year for the given tile, by looping over UTC days.
 
 Command line arguments:
 * `--year_start <INT>` — Start year, default: `2024`
@@ -245,18 +249,18 @@ Command line arguments:
 Example: Download images for UTC year 2024 for tile 35VLH:
 
 ```
-python -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --tile_id 35VLH
+python3 -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --tile_id 35VLH
 ```
 
 ### Convert SAFE to COG
 
-`python -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COGS_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+`python3 -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COGS_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
 
 The conversion to COG is done by stacking all images at each 10m, 20m, and 60m resoluton into a temporary uncompressed GeoTIFF, by adding metadata, and by creating for each resolution a COG using [rio-cogeo](https://cogeotiff.github.io/rio-cogeo/) with default arguments. This results in using Deflate compression and chunk sizes 512x512 at each resolution and also creates overviews at a few fractional resolutions.
 
 ### Convert SAFE to Zarr
 
-`python -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+`python3 -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
 
 This should not be considered as a reference implementation of SAFE to Zarr conversion because it does not include metadata from MTD_MSIL1C.xml (such as millisecond precision datetime) or other SAFE format metadata files, does not include nodata masks, stores CRS information in a hacky string format, and does not have an optimal bucket–group split for CSC Allas which has limitations on the number of buckets and the number of objects in a bucket.
 
