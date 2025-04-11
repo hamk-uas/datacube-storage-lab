@@ -45,7 +45,7 @@ sudo apt-get install s3cmd
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```
-pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient
+pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo
 ```
 
 ### CSC Puhti
@@ -199,7 +199,7 @@ The standard workflow is:
     python -m sentinel2_l1c.convert_safe_to_cog
     python -m sentinel2_l1c.convert_safe_to_zarr
     ```
-3. Manually create S3 buckets for the data in different formats and copy the data there.
+3. Manually create S3 buckets for the data in different formats and copy the data there. (slow!)
     ```
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COGS_BUCKET
@@ -209,11 +209,14 @@ The standard workflow is:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
     ```
 
-4. Benchmark: TODO...
+4. Benchmark:
+    ```
+    TODO
+    ```
 
 ### Intake SAFE
 
-To intake Sentinel 2 L1C images for a long time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` described in the next section.
+To intake Sentinel 2 L1C images for a lengthy time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` for yearly intake, described in the next section.
 
 `python -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
 
@@ -247,18 +250,23 @@ python -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --
 
 ### Convert SAFE to COG
 
-TODO
+`python -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COGS_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+
+The conversion to COG is done by stacking all images at each 10m, 20m, and 60m resoluton into a temporary uncompressed GeoTIFF, by adding metadata, and by creating for each resolution a COG using [rio-cogeo](https://cogeotiff.github.io/rio-cogeo/) with default arguments. This results in using Deflate compression and chunk sizes 512x512 at each resolution and also creates overviews at a few fractional resolutions.
 
 ### Convert SAFE to Zarr
 
-`python -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments.
+`python -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+
+This should not be considered as a reference implementation of SAFE to Zarr conversion because it does not include metadata from MTD_MSIL1C.xml (such as millisecond precision datetime) or other SAFE format metadata files, does not include nodata masks, stores CRS information in a hacky string format, and does not have an optimal bucket–group split for CSC Allas which has limitations on the number of buckets and the number of objects in a bucket.
 
 The conversion is not Dask-parallelized at SAFE level but Zarr may have its own internal parallelization. TODO: check.
 
 Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays reside inside nested "groups" in a Zarr "store". We will have a Zarr group hierarchy (in root to branch order): tile, year, band group.
 
-Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, and x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
+Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
 
+Chunk sizes for time, band, y, x:
 * 10 m resolution: 1, max, 512, 512 
 * 20 m resolution: 1, max, 256, 256
 * 60 m resolution: 1, max, 128, 128
