@@ -12,13 +12,42 @@ import rioxarray
 import json
 import datetime
 import argparse
-import collections
 from pathlib import Path
-from dask.distributed import Client
+import xmltodict
 from dotenv import load_dotenv
 load_dotenv()  # loads from .env in current directory
 
 from .utils import band_groups
+
+def get_safe_bounding_cube():
+    # Get a SAFE (any SAFE!)
+    safe_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"]
+    year_folder = sorted((Path(safe_folder) / f"Sentinel-2/MSI/L1C").glob('*'))[0]
+    year = year_folder.name
+    month_folder = sorted(year_folder.glob('*'))[0]
+    month = month_folder.name
+    day_folder = sorted(month_folder.glob('*'))[0]
+    day = day_folder.name
+    safe_folder = next(day_folder.glob('*.SAFE'))
+    safe_name = safe_folder.name
+    tile = safe_name.split(sep="_")[5][1:]  # For example "35VLH"
+    granule_folder = next((safe_folder / "GRANULE").glob('*'))
+    granule_metadata_file_name = os.path.join(granule_folder, "MTD_TL.xml")
+    with open(granule_metadata_file_name, "r", encoding="utf-8") as file:
+        xml_content = file.read()
+    granule_metadata_dict = xmltodict.parse(xml_content)
+    x1 = int(granule_metadata_dict["n1:Level-1C_Tile_ID"]['n1:Geometric_Info']['Tile_Geocoding']['Geoposition'][0]['ULX'])
+    y1 = int(granule_metadata_dict["n1:Level-1C_Tile_ID"]['n1:Geometric_Info']['Tile_Geocoding']['Geoposition'][0]['ULY'])
+    x2 = x1 + 109800
+    y2 = y1 - 109800
+    return {
+        "tile": tile,
+        "year": year,
+        "x1": x1,
+        "y1": y1,
+        "x2": x2,
+        "y2": y2
+    }
 
 def get_random_patch_crs_coords(x1=300000, y1=6800040, x2=409800, y2=6690240, tile_size=(5100, 5100), resolution=(60, 60)):  # Defaults are 35VLH corners in UTM zone 35N CRS
     patch_x1 = x1 + random.randint(0, ((x2 - x1) - tile_size[0])//resolution[0])*resolution[0]  # We assume x1 is origin and x1 < x2
@@ -148,19 +177,59 @@ def year_datacube_benchmark_zarr(year, patch_crs_coords, zarr_folder = os.enviro
     duration = time.time() - start
     return duration, band_group_datacubes
 
-def benchmark():
-    client = Client()  # start distributed scheduler locally.
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='Benchmark patch timeseries loading from multiple storage systems and formats'
+    )
+
+    defaults = {
+        "storages": ["network", "local", "s3"],
+        "formats": ["safe", "cog", "zarr"],
+        "num_repeats": 10
+    }
+
+    parser.add_argument(
+        '--storages',
+        type=str,
+        nargs='+',
+        choices=["network", "local", "s3"],
+        default=defaults["storages"],
+        help=f'List of space-separated ids of storages to benchmark, default: {" ".join(defaults["storages"])}'
+    )
+
+    parser.add_argument(
+        '--formats',
+        type=str,
+        nargs='+',
+        choices=["safe", "cog", "zarr"],
+        default=defaults["formats"],
+        help=f'List of space-separated ids of formats to benchmark, default: {" ".join(defaults["formats"])}'
+    )
+    
+    parser.add_argument(
+        '--num_repeats',
+        type=int,
+        default=defaults["num_repeats"],
+        help=f'Number of repeats, default: {" ".join(defaults["formats"])}'
+    )
+
+    return parser.parse_args()
+
+def benchmark(storages, formats, num_repeats):
     benchmark_timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    with zarr.storage.LocalStore(f'{os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"]}/sentinel-s2-l1c-zarr/', read_only=True) as zarr_store:
-        tile = next(zarr_store.keys())
-        year = next(zarr_store[tile].keys())
-    storages = ["network", "local", "s3"]
-    formats = collections.deque(["safe", "cog", "zarr"]) # A deque so that we can rotate the list easily for fairness
+    bounding_cube = get_safe_bounding_cube()
+    year = bounding_cube["year"]
+    tile = bounding_cube["tile_id"]
+    #with zarr.storage.LocalStore(f'{os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"]}/sentinel-s2-l1c-zarr/', read_only=True) as zarr_store:
+    #    tile = next(zarr_store.keys())
+    #    year = next(zarr_store[tile].keys())
     total_durations = dict.fromkeys(formats, 0)
     durations = dict(((method, []) for method in formats))
     num_repeats = 10
     random.seed(42)
     for repeat in range(num_repeats):
+        random.shuffle(storages)
+        random.shuffle(formats)
         patch_crs_coords = get_random_patch_crs_coords()
         for format in formats:
             print(format)
@@ -174,15 +243,15 @@ def benchmark():
             durations[format].append(duration)
             for band_group, band_group_datacube in band_group_datacubes.items():
                 print(band_group, band_group_datacube.shape)
-        formats.rotate(1)
         # Serializing json
-        with open(Path(os.environ[""]) / f"sentinel2_l1c_{benchmark_timestamp}.json", "w") as out_file:
+        with open(Path(os.environ["DSLAB_LOG_FOLDER"]) / f"sentinel2_l1c_{benchmark_timestamp}.json", "w") as out_file:
             json.dump({
                 "tile": tile,
-                "year": year,
+                "year": bounding_cube[year],
                 "durations": durations,
                 "total_durations": total_durations
             }, out_file, indent = 4)    
 
 if __name__=="__main__":
-    benchmark()
+    args = parse_arguments()
+    benchmark(**vars(args))
