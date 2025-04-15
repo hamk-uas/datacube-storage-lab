@@ -12,6 +12,7 @@ import re
 import rioxarray
 import json
 import datetime
+import s3fs
 import argparse
 from pathlib import Path
 import xmltodict
@@ -94,7 +95,7 @@ def year_datacube_benchmark_safe(year, patch_crs_coords, folder, storage="filesy
         s3_path_start = f"/vsicurl/{s3_endpoint}/{s3_bucket}/{year}"
     # Loop over months, in order
     patch_data_lists = {band_group: [] for band_group in band_groups.keys()}
-    for month_folder in sorted((pathlib.Path(path_start)).glob('*')):
+    for month_folder in sorted(pathlib.Path(path_start).glob('*')):
         month = month_folder.name
         if storage == "s3":
             month_s3_path = f"{s3_path_start}/{month}"
@@ -133,7 +134,7 @@ def year_datacube_benchmark_safe(year, patch_crs_coords, folder, storage="filesy
                         upper_left_x, upper_left_y, lower_right_x, lower_right_y = get_patch_image_coords(geo_transform, *patch_crs_coords)
                         patch_data = ds.data[:, upper_left_y:lower_right_y, upper_left_x:lower_right_x]  # Uses Dask array slicing
                         patch_data_lists[band_group].append(patch_data)
-        break # !!! uncomment for 1 month test run
+        #break # !!! uncomment for 1 month test run
     band_group_datacubes = {}
     for band_group in band_groups:
         dask_stack = dask.array.stack(patch_data_lists[band_group], axis=0)
@@ -147,16 +148,31 @@ def year_datacube_benchmark_safe(year, patch_crs_coords, folder, storage="filesy
 
 def year_datacube_benchmark_cog(year, patch_crs_coords, folder, storage="filesystem", s3_endpoint=None, s3_bucket=None):
     start = time.time()
-    path_start = f'{folder}/sentinel-s2-l1c-cog/35/V/LH/{year}'
+    path_start = folder
+    utm_zone_folder = next(pathlib.Path(path_start).glob('*'))
+    tile_letter_0_folder = next(utm_zone_folder.glob('*'))
+    tile_letters_12_folder = next(tile_letter_0_folder.glob('*'))
+    year_folder = tile_letters_12_folder / str(year)
+    if storage == "s3":
+        s3_year_folder = f"/vsicurl/{s3_endpoint}/{s3_bucket}/{utm_zone_folder.name}/{tile_letter_0_folder.name}/{tile_letters_12_folder.name}/{year}"
     # Loop over months, in order
     patch_data_lists = {band_group: [] for band_group in band_groups.keys()}
-    for month_folder in [pathlib.Path(path_start) / str(month) for month in sorted([int(month.name) for month in (pathlib.Path(path_start)).glob('*')])]:
+    for month_folder in [year_folder / str(month) for month in sorted([int(month.name) for month in year_folder.glob('*')])]:
         month = month_folder.name
-        for cog_folder_path in month_folder.glob('*'):
+        if storage == "s3":
+            s3_month_folder = f"{s3_year_folder}/{month}"
+        for cog_folder in month_folder.glob('*'):
+            if storage == "s3":
+                s3_cog_folder = f"{s3_month_folder}/{cog_folder.name}"
             for band_group in band_groups.keys():
-                band_group_image_path = cog_folder_path / f"{band_group}.tif"
-                ds = rioxarray.open_rasterio(band_group_image_path, chunks={"x": 512, "y": 512}, engine="rasterio")
-                crs = ds.rio.crs
+                band_group_image_path = cog_folder / f"{band_group}.tif"
+                if storage == "filesystem":
+                    use_band_group_image_path = band_group_image_path
+                elif storage == "s3":
+                    use_band_group_image_path = f"{s3_cog_folder}/{band_group}.tif"
+                    print(use_band_group_image_path)
+                ds = rioxarray.open_rasterio(use_band_group_image_path, chunks={"x": 512, "y": 512}, engine="rasterio")
+                # crs = ds.rio.crs
                 geo_transform = str_transform_to_transform(str(ds.rio.transform()))
                 upper_left_x, upper_left_y, lower_right_x, lower_right_y = get_patch_image_coords(geo_transform, *patch_crs_coords)
                 patch_data = ds.data[:, upper_left_y:lower_right_y, upper_left_x:lower_right_x]  # Uses Dask array slicing
@@ -179,7 +195,15 @@ def year_datacube_benchmark_zarr(year, patch_crs_coords, folder, storage="filesy
             abs(patch_crs_coords[3]-patch_crs_coords[1])//band_groups[band_group]["resolution"],
             abs(patch_crs_coords[2]-patch_crs_coords[0])//band_groups[band_group]["resolution"]
         ))
-    zarr_store = zarr.storage.LocalStore(f'{folder}/sentinel-s2-l1c-zarr/', read_only=True)
+    if storage == "s3":
+        fs = s3fs.S3FileSystem(anon=True, client_kwargs={'endpoint_url': s3_endpoint}, asynchronous=True)
+        zarr_store = zarr.storage.FsspecStore(
+            fs = fs,
+            read_only = True,
+            path = f'/{s3_bucket}/'
+        )
+    else:
+        zarr_store = zarr.storage.LocalStore(f'{folder}/', read_only=True)
     zarr_root = zarr.open(zarr_store, mode='r')
     tile_zarr_group = zarr_root["35VLH"]
     year_zarr_group = tile_zarr_group[f"{year}"]
@@ -187,7 +211,7 @@ def year_datacube_benchmark_zarr(year, patch_crs_coords, folder, storage="filesy
         print(band_group)
         band_zarr_group = year_zarr_group[band_group]
         ds = xr.open_zarr(zarr_store, band_zarr_group.path, zarr_format=3, chunks={})
-        crs = ds.attrs.get("crs", None)
+        #crs = ds.attrs.get("crs", None)
         geo_transform = str_transform_to_transform(ds.attrs.get("transform", None))
         upper_left_x, upper_left_y, lower_right_x, lower_right_y = get_patch_image_coords(geo_transform, *patch_crs_coords)
         patch_data = ds['data'].data[:, :, upper_left_y:lower_right_y, upper_left_x:lower_right_x]  # Uses Dask array slicing
@@ -320,21 +344,21 @@ def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2):
                     elif (storage == "network"):
                         duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"])
                     elif (storage == "s3"):
-                        duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, storage="s3", s3_endpoint_url=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_SAFE_BUCKET"])
+                        duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_SAFE_BUCKET"])
                 elif format == "cog":
                     if (storage == "temp"):
                         duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_TEMP_COG_PATH"])
                     elif (storage == "network"):
                         duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_COG_PATH"])
                     elif (storage == "s3"):
-                        duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, storage="s3", s3_endpoint_url=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_COG_BUCKET"])
+                        duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_COG_PATH"], storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_COG_BUCKET"])
                 elif format == "zarr":
                     if (storage == "temp"):
                         duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_TEMP_ZARR_PATH"])
                     elif (storage == "network"):
                         duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"])
                     elif (storage == "s3"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, storage="s3", s3_endpoint_url=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZARR_BUCKET"])
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZARR_BUCKET"])
                 if repeat > 0:
                     log["results"][storage][format]["total_duration"] += duration
                     log["results"][storage][format]["durations"].append(duration)

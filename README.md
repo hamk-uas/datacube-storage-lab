@@ -190,7 +190,7 @@ graph LR;
     end
 ```
 
-The standard workflow is:
+The standard workflow consists of of the following steps:
 1. Sentinel 2 L1C SAFE intake: (slow!)
     ```
     python3 -m sentinel2_l1c.intake_cdse_s3_year   
@@ -206,14 +206,19 @@ The standard workflow is:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
-4. Manually copy the data to the S3 buckets: (slow!)
+4. Manually copy the data to the S3 buckets, making them public: (slow, a few hours)
     ```
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
     ```
-
-4. Benchmark:
+5. Prepare temp storage for benchmarking by copying data to it from network storage: (a bit slow, around 10 minutes)
+    ```
+    rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
+    rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
+    rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
+    ```
+6. Benchmark
     ```
     python3 -m sentinel2_l1c.benchmark_patch_load
     ```
@@ -225,9 +230,9 @@ To intake Sentinel 2 L1C images for a lengthy time range, do not run `sentinel2_
 `python3 -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
 
 Command line arguments:
-* `time_start <STRING>` — Start time in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default:  `2024-02-21T00:00:00Z`
-* `time_end <STRING>` — End time (not included) in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default: `2024-02-22T00:00:00Z`
-* `tile_id <STRING>` — Tile identifier, default: `35VLH`
+* `--time_start <STRING>` — Start time in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default:  `2024-02-21T00:00:00Z`
+* `--time_end <STRING>` — End time (not included) in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default: `2024-02-22T00:00:00Z`
+* `--tile_id <STRING>` — Tile identifier, default: `35VLH`
 
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
@@ -277,6 +282,23 @@ Chunk sizes for time, band, y, x:
 
 ### Benchmark load times
 
+`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark. In S3 SAFE and S3 Zarr benchmarks, network storage files are used to determine the corresponding object paths in S3. This emulates a catalog stored in the network storage.
+
+Command line options:
+* `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark (can be used to leave out `temp` and `s3`), default: `network temp s3`
+* `--formats <SPACE-SEPARATED STRINGS>` — Formats to benchmark, default: `safe cog zarr`
+* `--num_repeats <INTEGER>` — Number of repeat (2 or more), default: `10`
+* `--year <INTEGER>` — Year for which to load data, default: autodetected from SAFE
+* `--tile <STRING>` — Tile id for which to load data, default: autodetected from SAFE
+* `--x1 <INTEGER>` — Horizontal position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--y1 <INTEGER>` — Vertical position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--x2 <INTEGER>` — Horizontal position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--y2 <INTEGER>` — Vertical position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+
+In preparation for benchmarking, intake should have been done just for a single year and intake, format conversions, and copying to different storages should not be interrupted. Otherwise different storages and formats may have slightly different but this can be verified from results.
+
+### Benchmark load times on CSC Puhti
+
 On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm batch script below first copies the files to the NVMe. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
 
 ```shell
@@ -298,8 +320,6 @@ rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
 rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
 python3 -m sentinel2_l1c.patch_timeseries_benchmark
 ```
-
-TODO: local
 
 ## Authors
 
