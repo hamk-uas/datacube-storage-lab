@@ -121,14 +121,14 @@ In the local clone of the present repository, create a file `.env` and configure
 
 ```
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
-DSLAB_S2L1C_NETWORK_COGS_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cogs
+DSLAB_S2L1C_NETWORK_COG_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cog
 DSLAB_S2L1C_NETWORK_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
 DSLAB_S2L1C_TEMP_SAFE_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_safe"
-DSLAB_S2L1C_TEMP_COGS_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_cogs"
+DSLAB_S2L1C_TEMP_COG_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_cog"
 DSLAB_S2L1C_TEMP_ZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr"
 DSLAB_S2L1C_S3_PROFILE=s3allas
 DSLAB_S2L1C_S3_SAFE_BUCKET=sentinel2_l1c_safe
-DSLAB_S2L1C_S3_COGS_BUCKET=sentinel2_l1c_cogs
+DSLAB_S2L1C_S3_COG_BUCKET=sentinel2_l1c_cog
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 DSLAB_LOG_FOLDER=/scratch/project_<PROJECT_NUMBER>/dslab_logs
 ```
@@ -203,13 +203,13 @@ The standard workflow is:
 3. Manually create S3 buckets for the data in different formats:
     ```
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COGS_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
 4. Manually copy the data to the S3 buckets: (slow!)
     ```
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ s3://$DSLAB_S2L1C_S3_COGS_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
     ```
 
@@ -254,7 +254,7 @@ python3 -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 -
 
 ### Convert SAFE to COG
 
-`python3 -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COGS_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+`python3 -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COG_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
 
 The conversion to COG is done by stacking all images at each 10m, 20m, and 60m resoluton into a temporary uncompressed GeoTIFF, by adding metadata, and by creating for each resolution a COG using [rio-cogeo](https://cogeotiff.github.io/rio-cogeo/) with default arguments. This results in using Deflate compression and chunk sizes 512x512 at each resolution and also creates overviews at a few fractional resolutions.
 
@@ -294,7 +294,7 @@ cd /users/<USERNAME>/datacube-storage-lab
 module load geoconda
 source ./.venv/bin/activate
 rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
-rsync -r $DSLAB_S2L1C_NETWORK_COGS_PATH/ $DSLAB_S2L1C_TEMP_COGS_PATH/
+rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
 rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
 python3 -m sentinel2_l1c.patch_timeseries_benchmark
 ```

@@ -1,4 +1,5 @@
 import numpy as np
+import boto3
 import rasterio
 import time
 import zarr
@@ -49,7 +50,7 @@ def get_safe_bounding_cube():
         "y2": y2
     }
 
-def get_random_patch_crs_coords(x1=300000, y1=6800040, x2=409800, y2=6690240, tile_size=(5100, 5100), resolution=(60, 60)):  # Defaults are 35VLH corners in UTM zone 35N CRS
+def get_random_patch_crs_coords(x1, y1, x2, y2, tile_size=(5100, 5100), resolution=(60, 60)):  # Defaults are 35VLH corners in UTM zone 35N CRS
     patch_x1 = x1 + random.randint(0, ((x2 - x1) - tile_size[0])//resolution[0])*resolution[0]  # We assume x1 is origin and x1 < x2
     patch_y1 = y1 - random.randint(0, ((y1 - y2) - tile_size[1])//resolution[1])*resolution[1]  # We assume y1 is origin and y2 < y1
     patch_x2 = patch_x1 + tile_size[0]
@@ -86,36 +87,53 @@ def str_transform_to_transform(matrix_string):
     matrix = [list(map(float, re.findall(r'-?\d+\.\d+', row))) for row in rows]
     return matrix[0][2], matrix[0][0], matrix[0][1], matrix[1][2], matrix[1][0], matrix[1][1]
 
-def year_datacube_benchmark_safe(year, patch_crs_coords, folder="/scratch/project_2008694"):
+def year_datacube_benchmark_safe(year, patch_crs_coords, folder, storage="filesystem", s3_endpoint=None, s3_bucket=None):
     start = time.time()                   
-    path_start = f'{folder}/safe/Sentinel-2/MSI/L1C/{year}'
+    path_start = f'{folder}/Sentinel-2/MSI/L1C/{year}'
+    if storage == "s3":
+        s3_path_start = f"/vsicurl/{s3_endpoint}/{s3_bucket}/{year}"
     # Loop over months, in order
     patch_data_lists = {band_group: [] for band_group in band_groups.keys()}
     for month_folder in sorted((pathlib.Path(path_start)).glob('*')):
         month = month_folder.name
+        if storage == "s3":
+            month_s3_path = f"{s3_path_start}/{month}"
         print(f"Month {month}")
         # Loop over days, in order
         for day_folder in sorted(month_folder.glob('*')):
             day = day_folder.name
+            if storage == "s3":
+                day_s3_path = f"{month_s3_path}/{day}"
             print(f"Day {day}")
             # Loop over SAFEs
             for safe_folder in day_folder.glob('*.SAFE'):
+                safe_name = safe_folder.name
                 granule_folder = next((safe_folder / "GRANULE").glob('*'))
+                granule = granule_folder.name
+                if storage == "s3":
+                    safe_s3_path = f"{day_s3_path}/{safe_name}"
+                    granule_s3_path = f"{safe_s3_path}/GRANULE/{granule}"
                 # Loop over band groups
                 for band_group in band_groups.keys():
                     #print(band_group)
                     bands = band_groups[band_group]["bands"]      
-                    for band_index, band in enumerate(bands):
+                    for band in bands:
                         #print(band)
                         image_path = next((granule_folder / "IMG_DATA").glob(f'*{band}.jp2'))
+                        if storage == "s3":
+                            image_s3_path = f"{granule_s3_path}/IMG_DATA/{image_path.name}"
                         #print(image_path)
-                        ds = rioxarray.open_rasterio(image_path, chunks={"x": 1024, "y": 1024})
-                        crs = ds.rio.crs
+                        if storage == "filesystem":
+                            use_image_path = image_path
+                        elif storage == "s3":
+                            use_image_path = image_s3_path
+                        ds = rioxarray.open_rasterio(use_image_path, chunks={"x": 1024, "y": 1024})
+                        #crs = ds.rio.crs
                         geo_transform = str_transform_to_transform(str(ds.rio.transform()))
                         upper_left_x, upper_left_y, lower_right_x, lower_right_y = get_patch_image_coords(geo_transform, *patch_crs_coords)
                         patch_data = ds.data[:, upper_left_y:lower_right_y, upper_left_x:lower_right_x]  # Uses Dask array slicing
                         patch_data_lists[band_group].append(patch_data)
-        #break # !!! uncomment for 1 month test run
+        break # !!! uncomment for 1 month test run
     band_group_datacubes = {}
     for band_group in band_groups:
         dask_stack = dask.array.stack(patch_data_lists[band_group], axis=0)
@@ -127,9 +145,9 @@ def year_datacube_benchmark_safe(year, patch_crs_coords, folder="/scratch/projec
     duration = time.time() - start
     return duration, band_group_datacubes
 
-def year_datacube_benchmark_cog(year, patch_crs_coords, folder="/scratch/project_2008694"):
+def year_datacube_benchmark_cog(year, patch_crs_coords, folder, storage="filesystem", s3_endpoint=None, s3_bucket=None):
     start = time.time()
-    path_start = f'{folder}/sentinel-s2-l1c-cogs/35/V/LH/{year}'
+    path_start = f'{folder}/sentinel-s2-l1c-cog/35/V/LH/{year}'
     # Loop over months, in order
     patch_data_lists = {band_group: [] for band_group in band_groups.keys()}
     for month_folder in [pathlib.Path(path_start) / str(month) for month in sorted([int(month.name) for month in (pathlib.Path(path_start)).glob('*')])]:
@@ -151,7 +169,7 @@ def year_datacube_benchmark_cog(year, patch_crs_coords, folder="/scratch/project
     duration = time.time() - start
     return duration, band_group_datacubes
 
-def year_datacube_benchmark_zarr(year, patch_crs_coords, zarr_folder = os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"]):
+def year_datacube_benchmark_zarr(year, patch_crs_coords, folder, storage="filesystem", s3_endpoint=None, s3_bucket=None):
     start = time.time()
     band_group_datacubes = {}
     for band_group in band_groups.keys():
@@ -182,17 +200,28 @@ def parse_arguments():
         description='Benchmark patch timeseries loading from multiple storage systems and formats'
     )
 
+    bounding_cube = get_safe_bounding_cube()
+    #with zarr.storage.LocalStore(f'{os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"]}/sentinel-s2-l1c-zarr/', read_only=True) as zarr_store:
+    #    tile = next(zarr_store.keys())
+    #    year = next(zarr_store[tile].keys())
+
     defaults = {
-        "storages": ["network", "local", "s3"],
+        "storages": ["network", "temp", "s3"],
         "formats": ["safe", "cog", "zarr"],
-        "num_repeats": 10
+        "num_repeats": 10,
+        "year": bounding_cube["year"],
+        "tile": bounding_cube["tile"],
+        "x1": bounding_cube["x1"],
+        "y1": bounding_cube["y1"],
+        "x2": bounding_cube["x2"],
+        "y2": bounding_cube["y2"]
     }
 
     parser.add_argument(
         '--storages',
         type=str,
         nargs='+',
-        choices=["network", "local", "s3"],
+        choices=["network", "temp", "s3"],
         default=defaults["storages"],
         help=f'List of space-separated ids of storages to benchmark, default: {" ".join(defaults["storages"])}'
     )
@@ -210,47 +239,118 @@ def parse_arguments():
         '--num_repeats',
         type=int,
         default=defaults["num_repeats"],
-        help=f'Number of repeats, default: {" ".join(defaults["formats"])}'
+        help=f'Number of repeats, default: {defaults["num_repeats"]}'
+    )
+
+    parser.add_argument(
+        '--year',
+        type=int,
+        default=defaults["year"],
+        help=f'Year, default (from network SAFE): {defaults["year"]}'
+    )
+
+    parser.add_argument(
+        '--tile',
+        type=str,
+        default=defaults["tile"],
+        help=f'Tile, default (from network SAFE): {defaults["tile"]}'
+    )
+
+    parser.add_argument(
+        '--x1',
+        type=int,
+        default=defaults["x1"],
+        help=f'Bounding box x1, default (from network SAFE): {defaults["x1"]}'
+    )
+    parser.add_argument(
+        '--y1',
+        type=int,
+        default=defaults["y1"],
+        help=f'Bounding box y1, default (from network SAFE): {defaults["y1"]}'
+    )
+    parser.add_argument(
+        '--x2',
+        type=int,
+        default=defaults["x2"],
+        help=f'Bounding box x2, default (from network SAFE): {defaults["x2"]}'
+    )
+    parser.add_argument(
+        '--y2',
+        type=int,
+        default=defaults["y2"],
+        help=f'Bounding box y2, default (from network SAFE): {defaults["y2"]}'
     )
 
     return parser.parse_args()
 
-def benchmark(storages, formats, num_repeats):
+def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2):
+    if "s3" in storages:
+        s3_session = boto3.Session(profile_name=os.environ["DSLAB_S2L1C_S3_PROFILE"])
+        s3_client = s3_session.client('s3')
+        s3_endpoint_url = s3_client.meta.endpoint_url    
     benchmark_timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    bounding_cube = get_safe_bounding_cube()
-    year = bounding_cube["year"]
-    tile = bounding_cube["tile_id"]
-    #with zarr.storage.LocalStore(f'{os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"]}/sentinel-s2-l1c-zarr/', read_only=True) as zarr_store:
-    #    tile = next(zarr_store.keys())
-    #    year = next(zarr_store[tile].keys())
-    total_durations = dict.fromkeys(formats, 0)
-    durations = dict(((method, []) for method in formats))
+    print(f"Benchmarking loading data for tile {tile}, year {year}")
+    log = {
+        "tile": tile,
+        "year": year,
+        "results": {
+
+        }
+    }
+    for storage in storages:
+        log["results"][storage] = {}
+        for format in formats:
+            log["results"][storage][format] = {
+                "durations": [],
+                "band_group_shapes": {},
+                "total_duration": 0,
+            }
     num_repeats = 10
     random.seed(42)
-    for repeat in range(num_repeats):
+    for repeat in range(num_repeats + 1):
         random.shuffle(storages)
         random.shuffle(formats)
-        patch_crs_coords = get_random_patch_crs_coords()
-        for format in formats:
-            print(format)
-            if format == "safe":
-                duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, os.environ['LOCAL_SCRATCH'])
-            elif format == "cog":
-                duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, os.environ['LOCAL_SCRATCH'])
-            elif format == "zarr":
-                duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, os.environ['LOCAL_SCRATCH'])
-            total_durations[format] += duration
-            durations[format].append(duration)
-            for band_group, band_group_datacube in band_group_datacubes.items():
-                print(band_group, band_group_datacube.shape)
-        # Serializing json
-        with open(Path(os.environ["DSLAB_LOG_FOLDER"]) / f"sentinel2_l1c_{benchmark_timestamp}.json", "w") as out_file:
-            json.dump({
-                "tile": tile,
-                "year": bounding_cube[year],
-                "durations": durations,
-                "total_durations": total_durations
-            }, out_file, indent = 4)    
+        patch_crs_coords = get_random_patch_crs_coords(x1=x1, y1=y1, x2=x2, y2=y2)
+        for storage in storages:
+            for format in formats:
+                print(format)
+                if format == "safe":
+                    if (storage == "temp"):
+                        duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_TEMP_SAFE_PATH"])
+                    elif (storage == "network"):
+                        duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"])
+                    elif (storage == "s3"):
+                        duration, band_group_datacubes = year_datacube_benchmark_safe(year, patch_crs_coords, storage="s3", s3_endpoint_url=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_SAFE_BUCKET"])
+                elif format == "cog":
+                    if (storage == "temp"):
+                        duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_TEMP_COG_PATH"])
+                    elif (storage == "network"):
+                        duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_COG_PATH"])
+                    elif (storage == "s3"):
+                        duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, storage="s3", s3_endpoint_url=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_COG_BUCKET"])
+                elif format == "zarr":
+                    if (storage == "temp"):
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_TEMP_ZARR_PATH"])
+                    elif (storage == "network"):
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"])
+                    elif (storage == "s3"):
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(year, patch_crs_coords, storage="s3", s3_endpoint_url=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZARR_BUCKET"])
+                if repeat > 0:
+                    log["results"][storage][format]["total_duration"] += duration
+                    log["results"][storage][format]["durations"].append(duration)
+                    log["results"][storage][format]["mean_durations"] = np.mean(log["results"][storage][format]["durations"])
+                    log["results"][storage][format]["std_durations"] = np.std(log["results"][storage][format]["durations"])
+                    log["results"][storage][format]["stderr_durations"] = np.std(log["results"][storage][format]["durations"]) / len(log["results"][storage][format]["durations"])           
+                    log["results"][storage][format]["band_group_shapes"] = {}
+                    for band_group, band_group_datacube in band_group_datacubes.items():
+                        log["results"][storage][format]["band_group_shapes"][band_group] = band_group_datacube.shape
+        if repeat > 0:
+            # Serializing json
+            logpath = Path(os.environ["DSLAB_LOG_FOLDER"]) / f"sentinel2_l1c_{benchmark_timestamp}.json"
+            print(f"Writing log to: {logpath}")
+            logpath.parent.mkdir(parents=True, exist_ok=True)
+            with open(logpath, "w") as out_file:
+                json.dump(log, out_file, indent = 4)    
 
 if __name__=="__main__":
     args = parse_arguments()

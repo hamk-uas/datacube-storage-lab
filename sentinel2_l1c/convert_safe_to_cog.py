@@ -17,7 +17,7 @@ from .utils import band_groups
 def get_cog_filename(storage_root, tile_id, year, month, day, platform_serial_identifier, item_index, band_group):
     return f"{storage_root}/{tile_id[:2]}/{tile_id[2]}/{tile_id[3:]}/{int(year)}/{int(month)}/S2{platform_serial_identifier}_{tile_id}_{year}{month}{day}_{item_index}_L1C/{band_group}.tif"
 
-def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], cog_to_folder = os.environ["DSLAB_S2L1C_NETWORK_COGS_PATH"]):
+def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], cog_to_folder = os.environ["DSLAB_S2L1C_NETWORK_COG_PATH"]):
     start = time.time()              
     total_num_items = 0
     # Loop over years, in order
