@@ -318,8 +318,10 @@ source ./.venv/bin/activate
 rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
 rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
 rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
-python3 -m sentinel2_l1c.patch_timeseries_benchmark
+python3 -m sentinel2_l1c.benchmark_patch_load
 ```
+
+TODO: document output
 
 ## Authors
 
