@@ -1,7 +1,5 @@
 # datacube-storage-lab
 
-Work in progress.
-
 There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
 
 Data storage benchmark process diagram:
@@ -50,42 +48,45 @@ pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio 
 
 ### CSC Puhti
 
-For running on CSC Puhti, this document assumes that the present repository is cloned to `/users/<USERNAME>/datacube-storage-lab` with your CSC username in place of the placeholder `<USERNAME>`, and that the Allas storage service is available to your project. If you clone the repository to another location, modify the paths given here accordingly.
-
-Configure Allas:
-
-```
-module load allas
-allas-conf --mode S3
+For running on CSC Puhti, clone the repository for example to `~/datacube-storage-lab` and work from there. Ensure that the Allas storage service is available to your project (if not, apply). You can work from command line by starting an interactive job from the Puhti login node and waiting in the queue:
+```shell
+srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-task=4 --mem=12G --partition=small --time=7:00:00 --pty
 ```
 
 Choose your CSC project when prompted. Then continue to load the module dependencies and create a Python venv with a few upgraded packages:
 ```
+module load allas
 module load geoconda
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-pip install --upgrade zarr xarray
+pip install --upgrade zarr xarray dotenv python-openstackclient xmltodict rio-cogeo
 ```
 
-There may be some errors but that's OK as long as you get a `Successfully installed` last line about the upgraded packages.
+There may be an error `ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+wrf-python 1.3.4.1 requires basemap, which is not installed.` but that's OK as long as you get a `Successfully installed` last line about the upgraded packages.
 
-The Allas mode will persist on successive jobs and you can also just use the same venv again (after module loads so that module packages don't mask venv packages):
-
+On sucessive jobs, the Allas mode will persist and you can also just use the same venv again (after module loads so that module packages don't mask venv packages):
 ```
 module load allas
 module load geoconda
 source .venv/bin/activate
 ```
 
-### Local configuration for CSC Allas S3
+### CSC Allas S3
 
-If you use CSC Allas but want to run the workflow outside CSC Puhti, follow CSC's instructions on [*Configuring S3 connection on local computer*](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd). Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
+To use Allas object storage from outside CSC Puhti, follow CSC's instructions on [*Configuring S3 connection on local computer*](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd). Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
 
-Move `~/.s3cfg` to `~/.s3allas`:
+Configure Allas, specifying a persistent S3 mode rather than Swift mode:
+```
+allas-conf --mode S3
+```
 
+Move the Allas config from `~/.s3cfg` to `~/.s3allas` for clarity:
 ```
 mv ~/.s3cfg ~/.s3allas
 ```
+
+If you want to, you can rename `s3allas` to something else, in all occurrences in these instructions, including the value of the `DSLAB_S2L1C_S3_PROFILE` environment variable in the next subsection.
 
 Edit `~/.aws/credentials` and change the heading `[default]` to `[s3allas]`.
 
@@ -93,14 +94,12 @@ Edit `~/.aws/config` and add a profile for Allas:
 
 ```
 [profile s3allas]
-endpoint_url = a3s.fi
+endpoint_url = https://a3s.fi
 ```
-
-If necessary, you can rename `s3allas` (all occurrences in the above) to something else. If you do so, then correspondingly edit the value of the `DSLAB_S2L1C_S3_PROFILE` environment variable in the next subsection.
 
 ### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
 
-To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source, configure its endpoint in `~/.aws/config` under a `cdse` profile. Edit the file and add:
+To use ESA Copernicus Data Space Ecosystem (CDSE) S3 API as a primary source (as per the workflow documented here), configure its endpoint in `~/.aws/config` under a `cdse` profile. Edit the file and add:
 
 ```
 [profile cdse]
@@ -117,7 +116,7 @@ aws_secret_access_key = <CDSE_SECRET_KEY>
 
 ### Folder and S3 configuration
 
-In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile, data folders/buckets, and a result folder where timestamped result json files will be created by the benchmark. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (with a placefolder `<PROJECT_NUMBER>` for your project number, which you should fill in):
+In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile, data folders/buckets, and a result folder where timestamped result json files will be created by the benchmark. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (filling in the placefolder `<PROJECT_NUMBER>` for your project number):
 
 ```
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
@@ -227,7 +226,7 @@ On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm ba
 
 ```shell
 #SBATCH --account=project_<PROJECT_NUMBER>
-#SBATCH --job-name=dataload
+#SBATCH --job-name=dsbench
 #SBATCH --output=/scratch/project_<PROJECT_NUMBER>/dataload_%A.txt
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
@@ -249,6 +248,12 @@ The batch script should be stored in a file named `job.sh` or similar, and [subm
 
 ```shell
 sbatch job.sh
+```
+
+As the benchmarking is a one-time thing you could also start an equivalent interactive job and enter the commands manually, to ensure they work:
+
+```shell
+srun --account=project_<PROJECT_NUMBER> --job-name=dataload --ntasks=1 --cpus-per-task=40 --mem=80G --partition=small --gres=nvme:750 --time=3:00:00
 ```
 
 ### Intake SAFE module
@@ -310,7 +315,7 @@ Chunk sizes for time, band, y, x:
 
 ### Benchmark load times module
 
-`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE and S3 Zarr benchmarks, network storage files are used to determine the corresponding object paths in S3. This emulates a catalog stored in the network storage.
+`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. Dask parallelization is used in loading. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE and S3 Zarr benchmarks, network storage files are used to determine the corresponding object paths in S3. This emulates a catalog stored in the network storage.
 
 Command line options:
 * `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark, default: `network temp s3`
