@@ -2,7 +2,7 @@
 
 Work in progress.
 
-There is a need to evaluate storage systems (for us at HAMK, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
+There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
 
 Data storage benchmark process diagram:
 
@@ -45,7 +45,7 @@ sudo apt-get install s3cmd
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```
-pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray
+pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray s3fs
 ```
 
 ### CSC Puhti
@@ -297,7 +297,7 @@ The conversion to COG is done by stacking all images at each 10m, 20m, and 60m r
 
 This should not be considered as a reference implementation of SAFE to Zarr conversion because it does not include metadata from MTD_MSIL1C.xml (such as millisecond precision datetime) or other SAFE format metadata files, does not include nodata masks, stores CRS information in a hacky string format, and does not have an optimal bucket–group split for CSC Allas which has limitations on the number of buckets and the number of objects in a bucket.
 
-The conversion is not Dask-parallelized at SAFE level but Zarr may have its own internal parallelization. TODO: check.
+The conversion is not Dask-parallelized at SAFE level but Zarr may have its own internal parallelization.
 
 Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays reside inside nested "groups" in a Zarr "store". We will have a Zarr group hierarchy (in root to branch order): tile, year, band group.
 
@@ -325,7 +325,7 @@ Command line options:
 
 In preparation for benchmarking, intake should have been done just for a single tile and a single year and intake, format conversions, and copying to different storages must have completed. Otherwise different storages and formats may have slightly different but this can be verified from results.
 
-The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm-SS.json` with the benchmark start datetime embedded in the file name. Example results with only the storage `network` and the format `cog` benchmarked follows. The durations are in seconds. Summaries  An initial warmup run (not counted in `num_repeats`) is done that is not reported in the results and does not affect the statistics. The `band_group_shapes` property can be compared between different storages and formats to ensure they loaded the same amount of data.
+The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm-SS.json` with the benchmark start datetime embedded in the file name. Example results with only the storage `network` and the format `cog` benchmarked follows. The durations are in seconds. Summary statistics are included. An initial warmup run (not counted in `num_repeats`) is done that is not reported in the results and does not affect the statistics. The `band_group_shapes` property can be compared between different storages and formats to ensure they loaded the same amount of data.
 
 ```json
 {
