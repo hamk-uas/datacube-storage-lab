@@ -1,5 +1,7 @@
 # datacube-storage-lab
 
+Work in progress. Currently Sentinel 2 L1C storage s3 format zarr doesn't work.
+
 There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
 
 Data storage benchmark process diagram:
@@ -43,7 +45,7 @@ sudo apt-get install s3cmd
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```
-pip install numpy zarr xarray pystac_client boto3 tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray s3fs
+pip install numpy zarr xarray pystac_client tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray s3fs==2025.3.0 boto3==1.35.36 aiobotocore==2.15.2 botocore==1.35.36
 ```
 
 ### CSC Puhti
@@ -210,6 +212,9 @@ The standard workflow consists of of the following steps:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
 5. Prepare temp storage for benchmarking by copying data to it from network storage: (a bit slow, around 10 minutes)
     ```
