@@ -79,7 +79,7 @@ source .venv/bin/activate
 
 ### Local configuration for CSC Allas S3
 
-If you use CSC Allas but want to run the workflow outside CSC Puhti, follow [CSC's instructions](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd) on *Configuring S3 connection on local computer*. Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
+If you use CSC Allas but want to run the workflow outside CSC Puhti, follow CSC's instructions on [*Configuring S3 connection on local computer*](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd). Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
 
 Move `~/.s3cfg` to `~/.s3allas`:
 
@@ -96,7 +96,7 @@ Edit `~/.aws/config` and add a profile for Allas:
 endpoint_url = a3s.fi
 ```
 
-If necessary, you can rename `s3allas` (all occurrences in the above) to something else. If you do so, then correspondingly editthe value of the `DSLAB_S2L1C_S3_PROFILE` environment variable in the next subsection.
+If necessary, you can rename `s3allas` (all occurrences in the above) to something else. If you do so, then correspondingly edit the value of the `DSLAB_S2L1C_S3_PROFILE` environment variable in the next subsection.
 
 ### Copernicus Data Space Ecosystem (CDSE) S3 API credentials
 
@@ -149,7 +149,7 @@ The Python modules in this repository typically have a `__main__` function and c
 python3 -m sentinel2_l1c.intake_cdse_s3_year
 ```
 
-The documentation for each module can be found below.
+Typically you'd follow the workflow as given below. The documentation for each module can also be found after the workflow.
 
 ## Sentinel 2 L1C
 
@@ -223,83 +223,7 @@ The standard workflow consists of of the following steps:
     python3 -m sentinel2_l1c.benchmark_patch_load
     ```
 
-### Intake SAFE
-
-To intake Sentinel 2 L1C images for a lengthy time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` for yearly intake, described in the next section.
-
-`python3 -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
-
-Command line arguments:
-* `--time_start <STRING>` — Start time in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default:  `2024-02-21T00:00:00Z`
-* `--time_end <STRING>` — End time (not included) in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default: `2024-02-22T00:00:00Z`
-* `--tile_id <STRING>` — Tile identifier, default: `35VLH`
-
-Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
-
-```
-python3 -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
-```
-
-### Intake SAFE (year)
-
-Querying the CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
-
-`python3 -m sentinel2_l1c.intake_cdse_s3_year` — Download images for a full UTC year for the given tile, by looping over UTC days.
-
-Command line arguments:
-* `--year_start <INT>` — Start year, default: `2024`
-* `--year_end <INT>` — End year (not included), default: `2025`
-* `--tile_id <STRING>` — Tile identifier, default: `35VLH`
-
-Example: Download images for UTC year 2024 for tile 35VLH:
-
-```
-python3 -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --tile_id 35VLH
-```
-
-### Convert SAFE to COG
-
-`python3 -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COG_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
-
-The conversion to COG is done by stacking all images at each 10m, 20m, and 60m resoluton into a temporary uncompressed GeoTIFF, by adding metadata, and by creating for each resolution a COG using [rio-cogeo](https://cogeotiff.github.io/rio-cogeo/) with default arguments. This results in using Deflate compression and chunk sizes 512x512 at each resolution and also creates overviews at a few fractional resolutions.
-
-### Convert SAFE to Zarr
-
-`python3 -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
-
-This should not be considered as a reference implementation of SAFE to Zarr conversion because it does not include metadata from MTD_MSIL1C.xml (such as millisecond precision datetime) or other SAFE format metadata files, does not include nodata masks, stores CRS information in a hacky string format, and does not have an optimal bucket–group split for CSC Allas which has limitations on the number of buckets and the number of objects in a bucket.
-
-The conversion is not Dask-parallelized at SAFE level but Zarr may have its own internal parallelization. TODO: check.
-
-Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays reside inside nested "groups" in a Zarr "store". We will have a Zarr group hierarchy (in root to branch order): tile, year, band group.
-
-Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
-
-Chunk sizes for time, band, y, x:
-* 10 m resolution: 1, max, 512, 512 
-* 20 m resolution: 1, max, 256, 256
-* 60 m resolution: 1, max, 128, 128
-
-### Benchmark load times
-
-`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark. In S3 SAFE and S3 Zarr benchmarks, network storage files are used to determine the corresponding object paths in S3. This emulates a catalog stored in the network storage.
-
-Command line options:
-* `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark (can be used to leave out `temp` and `s3`), default: `network temp s3`
-* `--formats <SPACE-SEPARATED STRINGS>` — Formats to benchmark, default: `safe cog zarr`
-* `--num_repeats <INTEGER>` — Number of repeat (2 or more), default: `10`
-* `--year <INTEGER>` — Year for which to load data, default: autodetected from SAFE
-* `--tile <STRING>` — Tile id for which to load data, default: autodetected from SAFE
-* `--x1 <INTEGER>` — Horizontal position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
-* `--y1 <INTEGER>` — Vertical position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
-* `--x2 <INTEGER>` — Horizontal position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
-* `--y2 <INTEGER>` — Vertical position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
-
-In preparation for benchmarking, intake should have been done just for a single year and intake, format conversions, and copying to different storages should not be interrupted. Otherwise different storages and formats may have slightly different but this can be verified from results.
-
-### Benchmark load times on CSC Puhti
-
-On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm batch script below first copies the files to the NVMe. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
+On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm batch script below contains steps 5 (copy files from network storage to NVMe storage) and 6 (benchmark) above. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
 
 ```shell
 #SBATCH --account=project_<PROJECT_NUMBER>
@@ -321,7 +245,136 @@ rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
 python3 -m sentinel2_l1c.benchmark_patch_load
 ```
 
-TODO: document output
+The batch script should be stored in a file named `job.sh` or similar, and [submitted](https://docs.csc.fi/computing/running/submitting-jobs/) in CSC Puhti by:
+
+```shell
+sbatch job.sh
+```
+
+### Intake SAFE module
+
+To intake Sentinel 2 L1C images for a lengthy time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` for yearly intake, described in the next section.
+
+`python3 -m sentinel2_l1c.intake_cdse_s3` — Download all Sentinel2 L1C SAFE-format images within a time range for a given tile using the CDSE STAC API and CDSE S3 API. 
+
+Command line arguments:
+* `--time_start <STRING>` — Start time in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default:  `2024-02-21T00:00:00Z`
+* `--time_end <STRING>` — End time (not included) in UTC format (`YYYY-MM-DDTHH:MM:SSZ`), default: `2024-02-22T00:00:00Z`
+* `--tile_id <STRING>` — Tile identifier, default: `35VLH`
+
+Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
+
+```
+python3 -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
+```
+
+### Intake SAFE year module
+
+Querying the CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
+
+`python3 -m sentinel2_l1c.intake_cdse_s3_year` — Download images for a full UTC year for the given tile, by looping over UTC days.
+
+Command line arguments:
+* `--year_start <INT>` — Start year, default: `2024`
+* `--year_end <INT>` — End year (not included), default: `2025`
+* `--tile_id <STRING>` — Tile identifier, default: `35VLH`
+
+Example: Download images for UTC year 2024 for tile 35VLH:
+
+```
+python3 -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --tile_id 35VLH
+```
+
+### Convert SAFE to COG module
+
+`python3 -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COG_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+
+The conversion to COG is done by stacking all images at each 10m, 20m, and 60m resoluton into a temporary uncompressed GeoTIFF, by adding metadata, and by creating for each resolution a COG using [rio-cogeo](https://cogeotiff.github.io/rio-cogeo/) with default arguments. This results in using Deflate compression and chunk sizes 512x512 at each resolution and also creates overviews at a few fractional resolutions.
+
+### Convert SAFE to Zarr module
+
+`python3 -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
+
+This should not be considered as a reference implementation of SAFE to Zarr conversion because it does not include metadata from MTD_MSIL1C.xml (such as millisecond precision datetime) or other SAFE format metadata files, does not include nodata masks, stores CRS information in a hacky string format, and does not have an optimal bucket–group split for CSC Allas which has limitations on the number of buckets and the number of objects in a bucket.
+
+The conversion is not Dask-parallelized at SAFE level but Zarr may have its own internal parallelization. TODO: check.
+
+Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays reside inside nested "groups" in a Zarr "store". We will have a Zarr group hierarchy (in root to branch order): tile, year, band group.
+
+Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
+
+Chunk sizes for time, band, y, x:
+* 10 m resolution: 1, max, 512, 512 
+* 20 m resolution: 1, max, 256, 256
+* 60 m resolution: 1, max, 128, 128
+
+### Benchmark load times module
+
+`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE and S3 Zarr benchmarks, network storage files are used to determine the corresponding object paths in S3. This emulates a catalog stored in the network storage.
+
+Command line options:
+* `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark, default: `network temp s3`
+* `--formats <SPACE-SEPARATED STRINGS>` — Formats to benchmark, default: `safe cog zarr`
+* `--num_repeats <INTEGER>` — Number of repeat (2 or more), default: `10`
+* `--year <INTEGER>` — Year for which to load data, default: autodetected from SAFE
+* `--tile <STRING>` — Tile id for which to load data, default: autodetected from SAFE
+* `--x1 <INTEGER>` — Horizontal position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--y1 <INTEGER>` — Vertical position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--x2 <INTEGER>` — Horizontal position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--y2 <INTEGER>` — Vertical position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+
+In preparation for benchmarking, intake should have been done just for a single tile and a single year and intake, format conversions, and copying to different storages must have completed. Otherwise different storages and formats may have slightly different but this can be verified from results.
+
+The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm-SS.json` with the benchmark start datetime embedded in the file name. Example results with only the storage `network` and the format `cog` benchmarked follows. The durations are in seconds. Summaries  An initial warmup run (not counted in `num_repeats`) is done that is not reported in the results and does not affect the statistics. The `band_group_shapes` property can be compared between different storages and formats to ensure they loaded the same amount of data.
+
+```json
+{
+    "tile": "35VLH",
+    "year": 2024,
+    "results": {
+        "network": {
+            "cog": {
+                "durations": [
+                    38.28519129753113,
+                    38.561540842056274,
+                    48.16329765319824,
+                    42.332008600234985,
+                    38.86043119430542,
+                    38.90768003463745,
+                    34.59686803817749,
+                    28.583977699279785,
+                    36.84263896942139,
+                    37.812105655670166
+                ],
+                "band_group_shapes": {
+                    "B01_B09_B10": [
+                        192,
+                        3,
+                        85,
+                        85
+                    ],
+                    "B02_B03_B04_B08": [
+                        192,
+                        4,
+                        510,
+                        510
+                    ],
+                    "B05_B06_B07_B8A_B11_B12": [
+                        192,
+                        6,
+                        255,
+                        255
+                    ]
+                },
+                "total_duration": 382.94573998451233,
+                "mean_durations": 38.294573998451234,
+                "std_durations": 4.7409876432052505,
+                "stderr_durations": 0.47409876432052506
+            }
+        }
+    }
+}
+```
 
 ## Authors
 
