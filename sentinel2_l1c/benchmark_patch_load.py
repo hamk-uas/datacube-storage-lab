@@ -12,8 +12,8 @@ import re
 import rioxarray
 import json
 import datetime
-import logging
-import http.client
+#import logging
+#import http.client
 import s3fs
 import argparse
 from pathlib import Path
@@ -21,9 +21,12 @@ import xmltodict
 from dotenv import load_dotenv
 load_dotenv()  # loads from .env in current directory
 
-http.client.HTTPConnection.debuglevel = 1
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+if int(zarr.__version__.split(".")[0]) < 3:
+    raise ImportError("zarr version 3 or higher is required. Current version: {zarr.__version__}")
+
+#http.client.HTTPConnection.debuglevel = 1
+#logging.basicConfig()
+#logging.getLogger().setLevel(logging.DEBUG)
 
 from .utils import band_groups
 
@@ -202,19 +205,16 @@ def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, stor
             abs(patch_crs_coords[2]-patch_crs_coords[0])//band_groups[band_group]["resolution"]
         ))
     if storage == "s3":
-        fs = s3fs.S3FileSystem(anon=True, client_kwargs={'endpoint_url': s3_endpoint}, asynchronous=True)
-        zarr_store = zarr.storage.FsspecStore(
-            fs = fs,
-            read_only = True,
-            path = f'/{s3_bucket}/'
-        )
+        s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
+        zarr_store = zarr.storage.FsspecStore(fs=s3, read_only=True, path=s3_bucket)
+
     elif storage == "filesystem":
         zarr_store = zarr.storage.LocalStore(f'{folder}/', read_only=True)
     #zarr_root = zarr.open(zarr_store, mode='r', zarr_format=3, use_consolidated=False)
     #tile_zarr_group = zarr_root[tile]
     #year_zarr_group = tile_zarr_group[f"{year}"]
     for band_group in band_groups.keys():
-        ds = xr.open_zarr(zarr_store, f"{tile}/{year}/{band_group}", zarr_format=3, chunks={}, consolidated=False)
+        ds = xr.open_zarr(store=zarr_store, group=f"{tile}/{year}/{band_group}", zarr_format=3, chunks={}, consolidated=False)
         #crs = ds.attrs.get("crs", None)
         geo_transform = str_transform_to_transform(ds.attrs.get("transform", None))
         upper_left_x, upper_left_y, lower_right_x, lower_right_y = get_patch_image_coords(geo_transform, *patch_crs_coords)

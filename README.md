@@ -1,7 +1,5 @@
 # datacube-storage-lab
 
-Work in progress. Currently Sentinel 2 L1C storage s3 format zarr doesn't work.
-
 There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
 
 Data storage benchmark process diagram:
