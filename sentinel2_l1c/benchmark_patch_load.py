@@ -340,6 +340,7 @@ def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2):
         random.shuffle(formats)
         patch_crs_coords = get_random_patch_crs_coords(x1=x1, y1=y1, x2=x2, y2=y2)
         for storage in storages:
+            print(storage)
             for format in formats:
                 print(format)
                 if format == "safe":
