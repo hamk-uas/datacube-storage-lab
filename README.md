@@ -24,6 +24,34 @@ The storage systems that are compared are 1) a network drive (project scratch on
 
 The use case that the benchmarking emulates is loading of randomly-located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile, or perhaps two tiles. Therefore, the temp storage need not be as large as the full data. Eventually, in machine learning training and serving, intake should store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best in the current benchmarking.
 
+## Results
+
+### Sentinel 2 L1C patch time series load time (April 2025)
+
+Running Sentinel 2 L1c patch time series load benchmark from HAMK GPU server we got the following mean load times comparing the storages CSC Allas S3 and the server's local `/data`, using different formats:
+
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            plotColorPalette: "#888, #000"
+---
+xychart-beta
+    title "Sentinel 2 L1C patch time series — HAMK GPU server"
+    x-axis ["Allas S3 SAFE", "Allas S3 COG", "Allas S3 Zarr", "/data SAFE", "/data COG", "/data Zarr"]
+    y-axis "Mean load time (s)" 0 --> 200
+    bar [8302, 191, 21.7, 99.2, 34.8, 1.77]
+    bar [0, 0, 0, 0, 0, 0]
+    
+```
+
+Allas S3 SAFE is off-the-scale, with time 8302s. For `/data` Zarr the mean load time is 1.77s.
+
 ## Prerequisites and configuration
 
 We assume Python 3.11 or later.
