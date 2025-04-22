@@ -1,6 +1,6 @@
 # datacube-storage-lab
 
-There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats.
+There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats, concentrating on Sentinel 2 Level-1C data.
 
 Data storage benchmark process diagram:
 
@@ -12,7 +12,7 @@ graph LR
         D("Temp storage (CSC Puhti node NVMe)")
     end
     A(Primary source)--Intake-->P("Network drive (CSC Puhti project scratch)")
-    P--Format conversion-->B
+    P==Format conversion==>B
     B--Manual copy-->C("S3 (CSC Allas)")
     B--Scripted copy-->D("Temp storage (CSC Puhti compute node NVMe)")
     B-->E(Random patch data load benchmark)
@@ -52,14 +52,14 @@ config:
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — HAMK GPU server"
-    x-axis ["Allas S3 SAFE", "Allas S3 COG", "Allas S3 Zarr", "/data SAFE", "/data COG", "/data Zarr"]
+    x-axis ["Allas S3 SAFE: 8302s", "Allas S3 COG: 191s", "Allas S3 Zarr: 21.7s", "/data SAFE: 99.2s", "/data COG: 34.8s", "/data Zarr: 1.77s"]
     y-axis "Mean load time (s)" 0 --> 200
     bar [8302, 191, 21.7, 99.2, 34.8, 1.77]
     bar [0, 0, 0, 0, 0, 0]
     
 ```
 
-Allas S3 SAFE is off-the-scale, with time 8302s. For `/data` Zarr the mean load time is 1.77s.
+The bar for Allas S3 SAFE is off the scale.
 
 ## Prerequisites and configuration
 
@@ -69,17 +69,17 @@ We assume Python 3.11 or later.
 
 For running locally in Ubuntu Linux, install dependencies:
 
-```
+```shell
 sudo add-apt-repository ppa:ubuntugis/ppa
 sudo apt update
 sudo apt-get install python3-pip
 sudo apt-get install gdal-bin libgdal-dev
 sudo apt-get install s3cmd
-````
+```
 
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
-```
+```shell
 pip install numpy zarr xarray pystac_client tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray s3fs==2025.3.0 boto3==1.35.36 aiobotocore==2.15.2 botocore==1.35.36
 ```
 
@@ -91,7 +91,7 @@ srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-t
 ```
 
 Choose your CSC project when prompted. Then continue to load the module dependencies and create a Python venv with a few upgraded packages:
-```
+```shell
 module load allas
 module load geoconda
 python3 -m venv --system-site-packages .venv
@@ -103,7 +103,7 @@ There may be an error `ERROR: pip's dependency resolver does not currently take 
 wrf-python 1.3.4.1 requires basemap, which is not installed.` but that's OK as long as you get a `Successfully installed` last line about the upgraded packages.
 
 On sucessive jobs, the Allas mode will persist and you can also just use the same venv again (after module loads so that module packages don't mask venv packages):
-```
+```shell
 module load allas
 module load geoconda
 source .venv/bin/activate
@@ -114,12 +114,12 @@ source .venv/bin/activate
 To use Allas object storage from outside CSC Puhti, follow CSC's instructions on [*Configuring S3 connection on local computer*](https://docs.csc.fi/data/Allas/using_allas/s3_client/#getting-started-with-s3cmd). Warning: using `allas_conf` will overwrite any existing `~/.s3cfg` and `~/.aws/credentials`. For this reason it is better to configure Allas first and then configure other S3 credentials.
 
 Configure Allas, specifying a persistent S3 mode rather than Swift mode:
-```
+```shell
 allas-conf --mode S3
 ```
 
 Move the Allas config from `~/.s3cfg` to `~/.s3allas` for clarity:
-```
+```shell
 mv ~/.s3cfg ~/.s3allas
 ```
 
@@ -151,11 +151,11 @@ aws_access_key_id = <CDSE_ACCESS_KEY>
 aws_secret_access_key = <CDSE_SECRET_KEY>
 ```
 
-### Folder and S3 configuration
+### Environment variables and storage configuration
 
 In the local clone of the present repository, create a file `.env` and configure in it environment variables specifying an S3 profile, data folders/buckets, and a result folder where timestamped result json files will be created by the benchmark. Use the following template tailored for CSC Puhti nodes with NVMe temporary storage (filling in the placefolder `<PROJECT_NUMBER>` for your project number):
 
-```
+```shell
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
 DSLAB_S2L1C_NETWORK_COG_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cog
 DSLAB_S2L1C_NETWORK_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
@@ -171,7 +171,13 @@ DSLAB_LOG_FOLDER=/scratch/project_<PROJECT_NUMBER>/dslab_logs
 
 If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>]` and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
 
-Verify that the following command lists these environment variables (if not, try opening a new terminal):
+
+Use the environment variables from `.env` with subsequent commands:
+```shell
+set -a; source .env; set +a
+```
+
+Verify that the following command lists the environment variables:
 
 ```shell
 env |grep DSLAB_
@@ -181,7 +187,7 @@ env |grep DSLAB_
 
 The Python modules in this repository typically have a `__main__` function and can therefore be launched from command line. In order to make the `.env` in the repo root findable by a module, the command line should be run from the repo root. For example, to run the module `sentinel2_l1c.intake_cdse_s3_year` which has source code in `sentinel2_l1c/intake_cdse_s3_year.py`:
 
-```
+```shell
 python3 -m sentinel2_l1c.intake_cdse_s3_year
 ```
 
@@ -228,22 +234,22 @@ graph LR;
 
 The standard workflow consists of of the following steps:
 1. Sentinel 2 L1C SAFE intake: (slow!)
-    ```
+    ```shell
     python3 -m sentinel2_l1c.intake_cdse_s3_year   
     ```
 2. Convert SAFE to COG and Zarr: (slow!)
-    ```
+    ```shell
     python3 -m sentinel2_l1c.convert_safe_to_cog
     python3 -m sentinel2_l1c.convert_safe_to_zarr
     ```
 3. Manually create S3 buckets for the data in different formats:
-    ```
+    ```shell
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
 4. Manually copy the data to the S3 buckets, making them public: (slow, a few hours)
-    ```
+    ```shell
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
@@ -251,23 +257,30 @@ The standard workflow consists of of the following steps:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
-5. Prepare temp storage for benchmarking by copying data to it from network storage: (a bit slow, around 10 minutes)
+    **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system:
+    ```shell
+    mkdir -p $DSLAB_S2L1C_NETWORK_SAFE_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/ $DSLAB_S2L1C_NETWORK_SAFE_PATH/
+    mkdir -p $DSLAB_S2L1C_NETWORK_COG_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_COG_BUCKET/ $DSLAB_S2L1C_NETWORK_COG_PATH/
+    mkdir -p $DSLAB_S2L1C_NETWORK_ZARR_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/ $DSLAB_S2L1C_NETWORK_ZARR_PATH/
     ```
+5. Prepare temp storage for benchmarking by copying data to it from network storage: (a bit slow, around 10 minutes)
+    ```shell
     rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
     rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
     rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
     ```
 6. Benchmark
-    ```
+    ```shell
     python3 -m sentinel2_l1c.benchmark_patch_load
     ```
 
 On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm batch script below contains steps 5 (copy files from network storage to NVMe storage) and 6 (benchmark) above. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
 
 ```shell
-#SBATCH --account=project_<PROJECT_NUMBER>
-#SBATCH --job-name=dsbench
-#SBATCH --output=/scratch/project_<PROJECT_NUMBER>/dataload_%A.txt
+#!/bin/bash
+#SBATCH --account=project_2008694
+#SBATCH --job-name=dslab
+#SBATCH --output=/scratch/project_2008694/dslab_%A.txt
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=80G
@@ -275,7 +288,9 @@ On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm ba
 #SBATCH --gres=nvme:750
 #SBATCH --time=3:00:00
 
-cd /users/<USERNAME>/datacube-storage-lab
+cd /users/niemital/datacube-storage-lab
+set -a; source .env; set +a
+module load allas
 module load geoconda
 source ./.venv/bin/activate
 rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
@@ -290,10 +305,10 @@ The batch script should be stored in a file named `job.sh` or similar, and [subm
 sbatch job.sh
 ```
 
-As the benchmarking is a one-time thing you could also start an equivalent interactive job and enter the commands manually, to ensure they work:
+As the benchmarking is a one-time thing you could also start an equivalent interactive job and enter the commands from the batch script manually, to ensure they work:
 
 ```shell
-srun --account=project_<PROJECT_NUMBER> --job-name=dataload --ntasks=1 --cpus-per-task=40 --mem=80G --partition=small --gres=nvme:750 --time=3:00:00
+srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-task=40 --mem=80G --partition=small --gres=nvme:750 --time=3:00:00 --pty bash
 ```
 
 ### Intake SAFE module
@@ -309,7 +324,7 @@ Command line arguments:
 
 Example: Download all images from a single tile 35VLH from a single UTC day 2024-02-21:
 
-```
+```shell
 python3 -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
 ```
 
