@@ -39,6 +39,15 @@ config:
     themeVariables:
         xyChart:
             backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
             plotColorPalette: "#888, #000"
 ---
 xychart-beta
