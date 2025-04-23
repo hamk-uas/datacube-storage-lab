@@ -241,9 +241,9 @@ On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm ba
 
 ```shell
 #!/bin/bash
-#SBATCH --account=project_2008694
+#SBATCH --account=project_<PROJECT_NUMBER>
 #SBATCH --job-name=dslab
-#SBATCH --output=/scratch/project_2008694/dslab_%A.txt
+#SBATCH --output=/scratch/project_<PROJECT_NUMBER>/dslab_%A.txt
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=80G
@@ -251,7 +251,7 @@ On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm ba
 #SBATCH --gres=nvme:750
 #SBATCH --time=3:00:00
 
-cd /users/niemital/datacube-storage-lab
+cd /users/<USERNAME>/datacube-storage-lab
 set -a; source .env; set +a
 module load allas
 module load geoconda
