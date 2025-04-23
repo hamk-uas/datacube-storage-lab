@@ -24,43 +24,6 @@ The storage systems that are compared are 1) a network drive (project scratch on
 
 The use case that the benchmarking emulates is loading of randomly-located patch time series data for machine learning training. In the actual use case, each compute node may not load data from all satellite image tiles over Finland but from a single tile, or perhaps two tiles. Therefore, the temp storage need not be as large as the full data. Eventually, in machine learning training and serving, intake should store the data directly in the S3 storage rather than the network drive, in the format that is found to be the best in the current benchmarking.
 
-## Results
-
-### Sentinel 2 L1C patch time series load time (April 2025)
-
-Running Sentinel 2 L1c patch time series load benchmark from HAMK GPU server we got the following mean load times comparing the storages CSC Allas S3 and the server's local `/data`, using different formats:
-
-```mermaid
----
-config:
-    xyChart:
-        width: 900
-        height: 600
-    themeVariables:
-        xyChart:
-            backgroundColor: "#000"
-            titleColor: "#fff"
-            xAxisLabelColor: "#fff"
-            xAxisTitleColor: "#fff"
-            xAxisTickColor: "#fff"
-            xAxisLineColor: "#fff"
-            yAxisLabelColor: "#fff"
-            yAxisTitleColor: "#fff"
-            yAxisTickColor: "#fff"
-            yAxisLineColor: "#fff"
-            plotColorPalette: "#888, #000"
----
-xychart-beta
-    title "Sentinel 2 L1C patch time series — HAMK GPU server"
-    x-axis ["Allas S3 SAFE: 8302s", "Allas S3 COG: 191s", "Allas S3 Zarr: 21.7s", "/data SAFE: 99.2s", "/data COG: 34.8s", "/data Zarr: 1.77s"]
-    y-axis "Mean load time (s)" 0 --> 200
-    bar [8302, 191, 21.7, 99.2, 34.8, 1.77]
-    bar [0, 0, 0, 0, 0, 0]
-    
-```
-
-The bar for Allas S3 SAFE is off the scale.
-
 ## Prerequisites and configuration
 
 We assume Python 3.11 or later.
@@ -257,7 +220,7 @@ The standard workflow consists of of the following steps:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
-    **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system:
+    **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system: (slow, an hour or so)
     ```shell
     mkdir -p $DSLAB_S2L1C_NETWORK_SAFE_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/ $DSLAB_S2L1C_NETWORK_SAFE_PATH/
     mkdir -p $DSLAB_S2L1C_NETWORK_COG_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_COG_BUCKET/ $DSLAB_S2L1C_NETWORK_COG_PATH/
@@ -269,7 +232,7 @@ The standard workflow consists of of the following steps:
     rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
     rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
     ```
-6. Benchmark
+6. Benchmark: (slow, should be under 3 hours)
     ```shell
     python3 -m sentinel2_l1c.benchmark_patch_load
     ```
@@ -435,6 +398,53 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
     }
 }
 ```
+
+## Results and conclusions
+
+### Sentinel 2 L1C patch time series load time (April 2025)
+
+Running Sentinel 2 L1c patch time series load benchmark from HAMK GPU server we got the following mean load times comparing the storages CSC Allas S3 and the server's local `/data`, using different formats:
+
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
+            plotColorPalette: "#888, #000"
+---
+xychart-beta
+    title "Sentinel 2 L1C patch time series — HAMK GPU server"
+    x-axis ["Allas S3 SAFE: 8302s", "Allas S3 COG: 191s", "Allas S3 Zarr: 21.7s", "/data SAFE: 99.2s", "/data COG: 34.8s", "/data Zarr: 1.77s"]
+    y-axis "Mean load time (s)" 0 --> 200
+    bar [8302, 191, 21.7, 99.2, 34.8, 1.77]
+    bar [0, 0, 0, 0, 0, 0]
+    
+```
+
+The chart's bar for Allas S3 SAFE is off the scale. Zarr seems to be the best format to use, together with fast local storage.
+
+A single tile-year (35VLH, 2024) has the following number of files (command `tree`) and total size (command `du -h --apparent-size –s .`):
+
+|Format|Files|Size (GiB)|
+|-|-|-|
+|SAFE|13332|115|
+|COG|768|200|
+|Zarr|24487|192|
+
+For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 
 ## Authors
 
