@@ -53,7 +53,7 @@ For running on CSC Puhti, clone the repository for example to `~/datacube-storag
 srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-task=4 --mem=12G --partition=small --time=7:00:00 --pty
 ```
 
-Choose your CSC project when prompted. Then continue to load the module dependencies and create a Python venv with a few upgraded packages:
+Load module dependencies and create a Python venv with a few upgraded packages:
 ```shell
 module load allas
 module load geoconda
@@ -135,7 +135,7 @@ DSLAB_LOG_FOLDER=/scratch/project_<PROJECT_NUMBER>/dslab_logs
 If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>]` and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
 
 
-Use the environment variables from `.env` with subsequent commands:
+Use the environment variables from `.env` with subsequent commands, by entering:
 ```shell
 set -a; source .env; set +a
 ```
