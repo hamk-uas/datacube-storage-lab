@@ -202,8 +202,8 @@ The standard workflow consists of of the following steps:
     ```
 2. Convert SAFE to COG and Zarr: (slow!)
     ```shell
-    python3 -m sentinel2_l1c.convert_safe_to_cog
-    python3 -m sentinel2_l1c.convert_safe_to_zarr
+    time python3 -m sentinel2_l1c.convert_safe_to_cog
+    time python3 -m sentinel2_l1c.convert_safe_to_zarr
     ```
 3. Manually create S3 buckets for the data in different formats:
     ```shell
@@ -213,9 +213,9 @@ The standard workflow consists of of the following steps:
     ```
 4. Manually copy the data to the S3 buckets, making them public: (slow, a few hours)
     ```shell
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
-    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
@@ -228,9 +228,9 @@ The standard workflow consists of of the following steps:
     ```
 5. Prepare temp storage for benchmarking by copying data to it from network storage: (a bit slow, around 10 minutes)
     ```shell
-    rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
-    rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
-    rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
+    time rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
+    time rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
+    time rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
     ```
 6. Benchmark: (slow, should be under 3 hours)
     ```shell
@@ -249,16 +249,19 @@ On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm ba
 #SBATCH --mem=80G
 #SBATCH --partition=small
 #SBATCH --gres=nvme:750
-#SBATCH --time=3:00:00
+#SBATCH --time=3-00:00:00
 
 cd /users/<USERNAME>/datacube-storage-lab
 set -a; source .env; set +a
 module load allas
 module load geoconda
 source ./.venv/bin/activate
-rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
-rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
-rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
+echo Copying SAFE from network to temp
+time rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
+echo Copying COG from network to temp
+time rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
+echo Copying Zarr from network to temp
+time rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
 python3 -m sentinel2_l1c.benchmark_patch_load
 ```
 
@@ -423,7 +426,7 @@ config:
             yAxisTitleColor: "#fff"
             yAxisTickColor: "#fff"
             yAxisLineColor: "#fff"
-            plotColorPalette: "#888, #000"
+            plotColorPalette: "#fff8, #000"
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — HAMK GPU server"
@@ -436,15 +439,48 @@ xychart-beta
 
 The chart's bar for Allas S3 SAFE is off the scale. Zarr seems to be the best format to use, together with fast local storage.
 
-A single tile-year (35VLH, 2024) has the following number of files (command `tree`) and total size (command `du -h --apparent-size –s .`):
+Benchmarked using a CSC Puhti compute node:
 
-|Format|Files|Size (GiB)|
-|-|-|-|
-|SAFE|13332|115|
-|COG|768|200|
-|Zarr|24487|192|
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
+            plotColorPalette: "#fff8, #000"
+---
+xychart-beta
+    title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
+    x-axis ["Allas S3 SAFE", "Allas S3 COG", "Allas S3 Zarr", "/scratch SAFE", "/scratch COG", "/scratch Zarr", "NVMe SAFE", "NVMe COG", "NVMe Zarr"]
+    y-axis "Mean load time (s)" 0 --> 200
+    bar [6590, 116, 10.9, 1141, 223, 12.0, 102, 15.9, 1.25]
+    bar [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    
+```
 
-For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
+The times in seconds were: Allas: 6590, 116, 10.9; /scratch: 1141, 223, 12.0; NVMe: 102, 15.9, 1.25.
+
+A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
+
+|Format|Files|Size (GiB)|Copy time (minutes)|
+|-|-|-|-|
+|SAFE|13332|115|24|
+|COG|768|200|11|
+|Zarr|24487|192|72|
+
+For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 
 ## Authors
 
