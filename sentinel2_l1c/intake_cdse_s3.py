@@ -10,8 +10,6 @@ import pystac_client
 import boto3
 from tenacity import retry, stop_after_attempt, wait_fixed
 from osgeo import gdal
-from dotenv import load_dotenv
-load_dotenv()  # loads from .env in current directory
 
 s3_session = boto3.Session(profile_name='cdse')
 s3_resource = s3_session.resource('s3')

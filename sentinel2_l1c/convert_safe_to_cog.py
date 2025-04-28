@@ -9,8 +9,6 @@ import tempfile
 import time
 import xmltodict
 from osgeo import gdal
-from dotenv import load_dotenv
-load_dotenv()  # loads from .env in current directory
 
 from .utils import band_groups
 

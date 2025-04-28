@@ -330,9 +330,9 @@ Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays re
 Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
 
 Chunk sizes for time, band, y, x:
-* 10 m resolution: 1, max, 512, 512 
-* 20 m resolution: 1, max, 256, 256
-* 60 m resolution: 1, max, 128, 128
+* 10 m resolution: 20, max, 512, 512 
+* 20 m resolution: 40, max, 256, 256
+* 60 m resolution: 80, max, 128, 128
 
 ### Benchmark load times module
 
@@ -404,7 +404,9 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 ## Results and conclusions
 
-### Sentinel 2 L1C patch time series load time (April 2025)
+### Sentinel 2 L1C patch time series load time (April 26, 2025), Zarr time chunk size 10
+
+These results are for a preliminary tile chunk size 10 for all resolutions.
 
 Running Sentinel 2 L1c patch time series load benchmark from HAMK GPU server we got the following mean load times comparing the storages CSC Allas S3 and the server's local `/data`, using different formats:
 

@@ -18,8 +18,6 @@ import s3fs
 import argparse
 from pathlib import Path
 import xmltodict
-from dotenv import load_dotenv
-load_dotenv()  # loads from .env in current directory
 
 if int(zarr.__version__.split(".")[0]) < 3:
     raise ImportError("zarr version 3 or higher is required. Current version: {zarr.__version__}")

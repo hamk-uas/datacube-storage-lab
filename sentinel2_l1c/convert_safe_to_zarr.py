@@ -5,8 +5,6 @@ import numpy as np
 import zarr
 from pathlib import Path
 import time
-from dotenv import load_dotenv
-load_dotenv()  # loads from .env in current directory
 
 if int(zarr.__version__.split(".")[0]) < 3:
     raise ImportError("zarr version 3 or higher is required. Current version: {zarr.__version__}")
@@ -86,7 +84,7 @@ def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], zarr
                             encoding = {
                                 "data": {
                                     "compressors": compressor,
-                                    "chunks": (10, len(bands), band_group_dict["y_chunk_size"], band_group_dict["x_chunk_size"]),  # (Time, band, Y, X) chunk sizes
+                                    "chunks": (band_group_dict["time_chunk_size"], len(bands), band_group_dict["y_chunk_size"], band_group_dict["x_chunk_size"]),  # (Time, band, Y, X) chunk sizes
                                 }
                             }
                             print(encoding)
