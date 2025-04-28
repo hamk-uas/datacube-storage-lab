@@ -465,12 +465,12 @@ xychart-beta
     title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
     x-axis ["Allas S3 SAFE", "Allas S3 COG", "Allas S3 Zarr", "/scratch SAFE", "/scratch COG", "/scratch Zarr", "NVMe SAFE", "NVMe COG", "NVMe Zarr"]
     y-axis "Mean load time (s)" 0 --> 200
-    bar [6590, 116, 10.9, 1141, 223, 12.0, 102, 15.9, 1.25]
+    bar [6379, 121, 11.0, 1041, 200, 8.0, 118, 17.0, 1.41]
     bar [0, 0, 0, 0, 0, 0, 0, 0, 0]
     
 ```
 
-The times in seconds were: Allas: 6590, 116, 10.9; /scratch: 1141, 223, 12.0; NVMe: 102, 15.9, 1.25.
+The times in seconds were: Allas: 6379, 121, 11.0; /scratch: 1041, 200, 8.0; NVMe: 118, 17.0, 1.41.
 
 A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
 
@@ -478,7 +478,7 @@ A single tile-year (35VLH, 2024) has the following number of files (command `tre
 |-|-|-|-|
 |SAFE|13332|115|24|
 |COG|768|200|11|
-|Zarr|24487|192|72|
+|Zarr|24487|192|71|
 
 For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 
