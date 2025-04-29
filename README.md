@@ -43,7 +43,7 @@ sudo apt-get install s3cmd
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
 
 ```shell
-pip install numpy zarr xarray pystac_client tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray s3fs==2025.3.0 boto3==1.35.36 aiobotocore==2.15.2 botocore==1.35.36
+pip install numpy zarr xarray pystac_client tenacity dotenv gdal rasterio python-openstackclient xmltodict rio-cogeo dask rioxarray progressbar2 s3fs==2025.3.0 boto3==1.35.36 aiobotocore==2.15.2 botocore==1.35.36
 ```
 
 ### CSC Puhti
@@ -213,9 +213,9 @@ The standard workflow consists of of the following steps:
     ```
 4. Manually copy the data to the S3 buckets, making them public: (slow, a few hours)
     ```shell
-    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
-    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
-    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE put -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
@@ -402,9 +402,24 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 }
 ```
 
-## Results and conclusions
+## Sentinel 2 results and conclusions
 
-### Sentinel 2 L1C patch time series load time (April 26, 2025), Zarr time chunk size 10
+A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
+
+|Format|Files|Size (GiB)|Copy time (minutes)|
+|-|-|-|-|
+|SAFE|13332|115|24|
+|COG|768|200|11|
+|Zarr 10|24487|192|71|
+|Zarr 20, 40, 80|8562|192|TODO|
+
+"Zarr 10" and "Zarr 20, 40, 80" refer to the two time chunking cases below.
+
+### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
+
+TODO
+
+### Patch time series load time, Zarr time chunk size 10 (April 26, 2025)
 
 These results are for a preliminary tile chunk size 10 for all resolutions.
 
@@ -473,14 +488,6 @@ xychart-beta
 ```
 
 The times in seconds were: Allas: 6379, 121, 11.0; /scratch: 1041, 200, 8.0; NVMe: 118, 17.0, 1.41.
-
-A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
-
-|Format|Files|Size (GiB)|Copy time (minutes)|
-|-|-|-|-|
-|SAFE|13332|115|24|
-|COG|768|200|11|
-|Zarr|24487|192|71|
 
 For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 

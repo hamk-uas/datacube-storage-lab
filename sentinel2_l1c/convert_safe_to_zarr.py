@@ -5,6 +5,7 @@ import numpy as np
 import zarr
 from pathlib import Path
 import time
+import progressbar
 
 if int(zarr.__version__.split(".")[0]) < 3:
     raise ImportError("zarr version 3 or higher is required. Current version: {zarr.__version__}")
@@ -13,11 +14,23 @@ from .utils import band_groups
 
 def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], zarr_to_folder = os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"]):
     start = time.time()              
-    total_num_items = 0
 
     zarr_store = zarr.storage.LocalStore(zarr_to_folder + "/", read_only=False)
+    
+    # Find number of items
+    total_num_items = 0
+    for year_folder in sorted((Path(safe_from_folder) / f"Sentinel-2/MSI/L1C").glob('*')):
+        # Loop over months, in order
+        for month_folder in sorted(year_folder.glob('*')):
+            # Loop over days, in order
+            for day_folder in sorted(month_folder.glob('*')):
+                # Loop over SAFEs
+                for safe_folder in day_folder.glob('*.SAFE'):
+                    total_num_items += 1
 
+    progress = progressbar.ProgressBar(max_value=total_num_items)
     # Loop over years, in order
+    total_num_items = 0
     for year_folder in sorted((Path(safe_from_folder) / f"Sentinel-2/MSI/L1C").glob('*')):
         year = year_folder.name
         # Loop over months, in order
@@ -28,6 +41,7 @@ def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], zarr
                 day = day_folder.name
                 # Loop over SAFEs
                 for safe_folder in day_folder.glob('*.SAFE'):
+                    progress.update(total_num_items)
                     total_num_items += 1
                     safe_name = safe_folder.name
                     print("safe_name", safe_name)
