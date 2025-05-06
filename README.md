@@ -329,8 +329,8 @@ Zarr is a cloud-native format for rectangular multidimensional arrays. Arrays re
 
 Zarr v3 consists of metadata JSON files (or objects in object storage) and compressed chunks of data in subfolders. A chunk size must be chosen for each dimension. The dimensions of our arrays are: time, band, y, x. We will use different chunk sizes for band groups at different resolutions (with "max" denoting to use the number of bands as the chunk size):
 
-Chunk sizes for time, band, y, x:
-* 10 m resolution: 20, max, 512, 512 
+Chunk sizes for time, band, y, x (defined and editable in `sentinel2_l1c/utils.py`):
+* 10 m resolution: 20, max, 512, 512
 * 20 m resolution: 40, max, 256, 256
 * 60 m resolution: 80, max, 128, 128
 
@@ -414,6 +414,62 @@ A single tile-year (35VLH, 2024) has the following number of files (command `tre
 |Zarr 20, 40, 80*|8562|192|TODO|
 
 *) "Zarr 10" and "Zarr 20, 40, 80" refer to the two time chunking cases below.
+
+To generate File size histograms you can use the following commands and Python code:
+
+```shell
+find . -type f -exec du --apparent-size --block-size=1 {} + |grep B02_B03 >10m.txt
+find . -type f -exec du --apparent-size --block-size=1 {} + |grep B05_B06_B07_B8A_B11_B12 >20m.txt
+find . -type f -exec du --apparent-size --block-size=1 {} + |grep B01_B09_B10 >60m.txt
+```
+
+```Python
+import matplotlib.pyplot as plt
+import numpy as np
+from itertools import cycle
+
+# Get the default color cycle from matplotlib
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+color_iterator = cycle(colors)
+
+resolutions = ['10m', '20m', '60m']
+
+# Calculate the overall range of file sizes to determine common bins
+all_file_sizes = []
+for resolution in resolutions:
+    with open(resolution + ".txt", 'r') as file:
+        for line in file:
+            size = int(line.split()[0])
+            size_MiB = size / (1024 * 1024)  # Convert to MiB
+            all_file_sizes.append(size_MiB)
+
+# Calculate bin edges based on overall range
+_, bins = np.histogram(all_file_sizes, bins=50)
+
+fig, ax = plt.subplots()  # Create a single figure and axes
+
+for i, resolution in enumerate(resolutions):
+    file_sizes = []
+    with open(resolution + ".txt", 'r') as file:
+        for line in file:
+            size = int(line.split()[0])
+            size_MiB = size / (1024 * 1024)
+            file_sizes.append(size_MiB)
+
+    # Calculate and label the mean
+    mean_size = np.mean(file_sizes)
+    
+    # Use the color from the 'colors' list for both the histogram and the mean line
+    color = next(color_iterator)
+    ax.hist(file_sizes, bins=bins, alpha=0.5, label=f'{resolution} (mean={mean_size:.2f} MiB)', color=color)  
+    ax.axvline(mean_size, color=color, linestyle='dashed', linewidth=1)  
+
+ax.set_xlabel('File size (MiB)')
+ax.set_ylabel('Frequency')
+ax.set_title('Histogram of file sizes')
+ax.legend()  # Show legend with labels
+plt.show()
+```
 
 ### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
 
