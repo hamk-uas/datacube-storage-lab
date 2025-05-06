@@ -406,7 +406,7 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
 
-|Format|Files|Size (GiB)|Copy time (minutes)|
+|Format|Files|Size (GiB)|Copy time from /scratch to NVMe (minutes)|
 |-|-|-|-|
 |SAFE|13332|115|24|
 |COG|768|200|11|
