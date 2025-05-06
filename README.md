@@ -411,9 +411,9 @@ A single tile-year (35VLH, 2024) has the following number of files (command `tre
 |SAFE|13332|115|24|
 |COG|768|200|11|
 |Zarr 10*|24487|192|71|
-|Zarr 20, 40, 80*|8562|192|TODO|
+|Zarr 20, 40, 80*|8562|192|30|
 
-*) "Zarr 10" and "Zarr 20, 40, 80" refer to the two time chunking cases below.
+*) "Zarr 10" and "Zarr 20, 40, 80" (current configuration) refer to the two time chunking cases below.
 
 To generate File size histograms you can use the following commands and Python code:
 
