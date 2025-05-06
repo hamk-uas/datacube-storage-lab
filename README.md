@@ -211,7 +211,7 @@ The standard workflow consists of of the following steps:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     ```
-4. Manually copy the data to the S3 buckets, making them public: (slow, a few hours)
+4. Manually copy the data to the S3 buckets and make them public: (slow, up to a few hours)
     ```shell
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
@@ -473,7 +473,7 @@ plt.show()
 
 ### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
 
-TODO
+Compared to Zarr with a time chunk size of 10 for all bands, time chunk sizes 20, 40, 80 reduce the number of small files but for low resolutions the files are disproportionally small in size. There are not that many of those files so it might not be a big problem.
 
 ![histo_zarr20_40_80.png](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
 
