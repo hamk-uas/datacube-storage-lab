@@ -419,6 +419,8 @@ A single tile-year (35VLH, 2024) has the following number of files (command `tre
 
 TODO
 
+![histo_zarr20_40_80.png](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
+
 ### Patch time series load time, Zarr time chunk size 10 (April 26, 2025)
 
 These results are for a preliminary tile chunk size 10 for all resolutions.
@@ -490,7 +492,8 @@ xychart-beta
 The times in seconds were: Allas: 6379, 121, 11.0; /scratch: 1041, 200, 8.0; NVMe: 118, 17.0, 1.41.
 
 Zarr has quite many small files, and it's worse with the smaller resolutions:
-![histo_zarr10](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
+![histo_zarr10.png](https://github.com/user-attachments/assets/10a3e85f-41f3-451a-921b-998febe1448a)
+
 
 For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 
