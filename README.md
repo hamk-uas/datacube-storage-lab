@@ -1,5 +1,7 @@
 # datacube-storage-lab
 
+(Work in progress: Zipped Zarr implementation is unfinished although it is already partially documented here.)
+
 There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats, concentrating on Sentinel 2 Level-1C data.
 
 Data storage benchmark process diagram:
@@ -38,6 +40,7 @@ sudo apt update
 sudo apt-get install python3-pip
 sudo apt-get install gdal-bin libgdal-dev
 sudo apt-get install s3cmd
+sudo apt-get install zip
 ```
 
 and pip packages (specifying the GDAL version you got from the above, for example `gdal==3.8.4`, if needed to resolve unmet dependencies):
@@ -122,17 +125,21 @@ In the local clone of the present repository, create a file `.env` and configure
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
 DSLAB_S2L1C_NETWORK_COG_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cog
 DSLAB_S2L1C_NETWORK_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
+DSLAB_S2L1C_NETWORK_ZIPZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr.zip
 DSLAB_S2L1C_TEMP_SAFE_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_safe"
 DSLAB_S2L1C_TEMP_COG_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_cog"
 DSLAB_S2L1C_TEMP_ZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr"
+DSLAB_S2L1C_TEMP_ZIPZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr.zip"
 DSLAB_S2L1C_S3_PROFILE=s3allas
 DSLAB_S2L1C_S3_SAFE_BUCKET=sentinel2_l1c_safe
 DSLAB_S2L1C_S3_COG_BUCKET=sentinel2_l1c_cog
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
+DSLAB_S2L1C_S3_ZIPZARR_BUCKET=sentinel2_l1c_zipzarr
+DSLAB_S2L1C_S3_ZIPZARR_KEY=sentinel2_l1c_zarr.zip
 DSLAB_LOG_FOLDER=/scratch/project_<PROJECT_NUMBER>/dslab_logs
 ```
 
-If you don't use CSC services, change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>]` and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
+If you don't use CSC services, then change the folders and edit the value of `DSLAB_S2L1C_S3_PROFILE` so that an s3cmd configuration is found at `~/.<DSLAB_S2L1C_S3_PROFILE>` and a configuration and credentials to use with Boto3 are found in `~/.aws/config` under a heading `[profile <DSLAB_S2L1C_S3_PROFILE>]` and in `~/.aws/credentials` under a heading `[<DSLAB_S2L1C_S3_PROFILE>]` with the value of `DSLAB_S2L1C_S3_PROFILE` filled in place of the placeholder `<DSLAB_S2L1C_S3_PROFILE>`. See the above section *Copernicus Data Space Ecosystem (CDSE) S3 API credentials* for an example.
 
 
 Use the environment variables from `.env` with subsequent commands, by entering:
@@ -160,7 +167,7 @@ Typically you'd follow the workflow as given below. The documentation for each m
 
 For Sentinel 2 Level-1C products, we use the free ESA Copernicus Data Space Ecosystem (CDSE) APIS: STAC for tile-based searches and the S3 as the primary source of the data. We do not benchmark the CDSE S3 API because download quota limitations would prevent its use in the intended machine learning use case.
 
-The Python scripts in the `sentinel2_l1c` folder handle intake and conversions. The intake and copying/format conversion to 1) the network drive, 2) a compute node's temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) and benchmarking is done as follows:
+The Python scripts in the `sentinel2_l1c` folder handle intake, conversions, and random patch time series data load benchmarking. The intake and copying/format conversion to 1) the network drive, 2) a compute node's temp (typically fast NVMe storage on a compute node), and 3) S3 (CSC Allas) and benchmarking is done as follows:
 
 ```mermaid
 graph LR;
@@ -174,14 +181,21 @@ graph LR;
     H-->K
     I-->K
     J-->K
-    B--<code>Scripted copy</code>--->J(Temp SAFE);
-    B--<code>Manual copy</code>--->I(S3 SAFE);    
+    B--Scripted copy--->J(Temp SAFE);
+    B--Manual copy--->I(S3 SAFE);    
     B--<code>safe_to_cog</code>-->C(Network drive COG);
     B--<code>safe_to_zarr</code>-->D(Network drive Zarr);
-    C--<code>Scripted copy</code>-->E(Temp COG);
-    D--<code>Scripted copy</code>-->F(Temp Zarr);
-    C--<code>Manual copy</code>-->G(S3 COG);
-    D--<code>Manual copy</code>-->H(S3 Zarr);    
+    C--Scripted copy-->E(Temp COG);
+    C--Manual copy-->G(S3 COG);
+    D--Manual copy-->H(S3 Zarr);
+    D--Scripted copy-->F(Temp Zarr);
+    D--Manual <code>zip</code>-->L(Network drive zipped Zarr);
+    L-->K
+    L--Manual copy-->M(S3 zipped Zarr);
+    M--Scripted copy-->N(Temp zipped Zarr)
+    N--Scripted <code>unzip</code>-->F
+    M-->K
+    N-->K
     subgraph Storage and format alternatives
         B
         C
@@ -192,6 +206,9 @@ graph LR;
         H
         I
         J
+        L
+        M
+        N
     end
 ```
 
@@ -205,34 +222,51 @@ The standard workflow consists of of the following steps:
     time python3 -m sentinel2_l1c.convert_safe_to_cog
     time python3 -m sentinel2_l1c.convert_safe_to_zarr
     ```
-3. Manually create S3 buckets for the data in different formats:
+3. Manually zip the Zarr:
+    ```shell
+    zip -0 -r $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH $DSLAB_S2L1C_NETWORK_ZARR_PATH/
+    ```
+4. Manually create S3 buckets for the data in different formats:
     ```shell
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET
     ```
-4. Manually copy the data to the S3 buckets and make them public: (slow, up to a few hours)
+5. Manually copy the data to the S3 buckets and make them public: (slow, up to a few hours)
     ```shell
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
+    time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET
     ```
     **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system: (slow, an hour or so)
     ```shell
     mkdir -p $DSLAB_S2L1C_NETWORK_SAFE_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/ $DSLAB_S2L1C_NETWORK_SAFE_PATH/
     mkdir -p $DSLAB_S2L1C_NETWORK_COG_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_COG_BUCKET/ $DSLAB_S2L1C_NETWORK_COG_PATH/
     mkdir -p $DSLAB_S2L1C_NETWORK_ZARR_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/ $DSLAB_S2L1C_NETWORK_ZARR_PATH/
+    mkdir -p "$(dirname "$DSLAB_S2L1C_NETWORK_ZIPZARR_PATH")"; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH
     ```
-5. Prepare temp storage for benchmarking by copying data to it from network storage: (a bit slow, around 10 minutes)
+6. Prepare temp storage for benchmarking by copying data to it from network storage: (should take less than an hour)
     ```shell
     time rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
     time rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
     time rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
+    mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time rsync -r $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH/ $DSLAB_S2L1C_TEMP_ZIPZARR_PATH/
     ```
-6. Benchmark: (slow, should be under 3 hours)
+    Zipped Zarr can (alternatively) be copied from S3 to temp, which better reflects the planned machine learning use case:
+    ```shell
+    mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
+    ```
+    And zipped Zarr can also be extracted to Zarr, which is interesting to time:
+
+    TODO
+
+7. Benchmark: (slow, should be under 3 hours)
     ```shell
     python3 -m sentinel2_l1c.benchmark_patch_load
     ```
@@ -471,12 +505,6 @@ ax.legend()  # Show legend with labels
 plt.show()
 ```
 
-### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
-
-Compared to Zarr with a time chunk size of 10 for all bands, time chunk sizes 20, 40, 80 reduce the number of small files but for low resolutions the files are disproportionally small in size. There are not that many of those files so it might not be a big problem.
-
-![histo_zarr20_40_80.png](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
-
 ### Patch time series load time, Zarr time chunk size 10 (April 26, 2025)
 
 These results are for a preliminary tile chunk size 10 for all resolutions.
@@ -552,6 +580,47 @@ Zarr has quite many small files, and it's worse with the smaller resolutions:
 
 
 For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
+
+### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
+
+Compared to Zarr with a time chunk size of 10 for all bands, time chunk sizes 20, 40, 80 reduce the number of small files but for low resolutions the files are disproportionally small in size. There are not that many of those files so it might not be a big problem. It might actually be beneficial when still updating the Zarr.
+
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
+            plotColorPalette: "#fff8, #000"
+---
+xychart-beta
+    title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
+    x-axis ["Allas S3 COG", "Allas S3 Zarr", "/scratch COG", "/scratch Zarr", "NVMe COG", "NVMe Zarr"]
+    y-axis "Mean load time (s)" 0 --> 200
+    bar [99.8, 8.72, 381, 9.6, 15.4, 1.07]
+    bar [0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+    
+```
+
+The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 1.07.
+
+![histo_zarr20_40_80.png](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
+
+### Zipped patch time series load time, Zarr time chunk sizes 20, 40, 80
+
 
 ## Authors
 
