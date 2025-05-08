@@ -215,63 +215,92 @@ graph LR;
 The standard workflow consists of of the following steps:
 1. Sentinel 2 L1C SAFE intake: (slow!)
     ```shell
+    # Intake
     python3 -m sentinel2_l1c.intake_cdse_s3_year   
     ```
 2. Convert SAFE to COG and Zarr: (slow!)
     ```shell
+    # Convert network safe to network cog
     time python3 -m sentinel2_l1c.convert_safe_to_cog
+    # Convert network safe to network zarr
     time python3 -m sentinel2_l1c.convert_safe_to_zarr
     ```
-3. Manually zip the Zarr:
+3. Manually zip the Zarr (takes about 15 minutes):
     ```shell
-    zip -0 -r $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH $DSLAB_S2L1C_NETWORK_ZARR_PATH/
+    # Convert network zarr to network zipzarr
+    (cd $DSLAB_S2L1C_NETWORK_ZARR_PATH && time zip -0 -r $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH .)
     ```
 4. Manually create S3 buckets for the data in different formats:
     ```shell
+    # Create network safe bucket
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
+    # Create network cog bucket
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_COG_BUCKET
+    # Create network zarr bucket
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    # Create network zipzarr bucket
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET
     ```
-5. Manually copy the data to the S3 buckets and make them public: (slow, up to a few hours)
+5. Manually copy the data to the S3 buckets and make them public: (slow, up to a few hours; ~45 minutes for zipped Zarr from HAMK network)
     ```shell
+    # Copy network safe to s3 safe
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/
+    # Copy network cog to s3 cog
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_COG_PATH/ s3://$DSLAB_S2L1C_S3_COG_BUCKET/
+    # Copy network zarr to s3 zarr
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/
+    # Copy network zipzarr to s3 zipzarr
     time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE sync -P $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY
+    # Make s3 safe bucket publicly readlable
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
+    # Make s3 cog bucket publicly readlable
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_COG_BUCKET
+    # Make s3 zarr bucket publicly readlable
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
+    # Make s3 zipzarr bucket publicly readlable
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE setpolicy public-read-policy.json s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET
     ```
-    **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system: (slow, an hour or so)
+    **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system: (slow, an hour or so at CSC Puhti)
     ```shell
+    # Copy s3 safe to network safe
     mkdir -p $DSLAB_S2L1C_NETWORK_SAFE_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/ $DSLAB_S2L1C_NETWORK_SAFE_PATH/
+    # Copy s3 cog to network cog
     mkdir -p $DSLAB_S2L1C_NETWORK_COG_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_COG_BUCKET/ $DSLAB_S2L1C_NETWORK_COG_PATH/
+    # Copy s3 zarr to network zarr
     mkdir -p $DSLAB_S2L1C_NETWORK_ZARR_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/ $DSLAB_S2L1C_NETWORK_ZARR_PATH/
+    # Copy s3 zipzarr to network zipzarr
     mkdir -p "$(dirname "$DSLAB_S2L1C_NETWORK_ZIPZARR_PATH")"; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH
     ```
-6. Prepare temp storage for benchmarking by copying data to it from network storage: (should take less than an hour)
+6. Prepare temp storage for benchmarking by copying data to it from network storage: (altogether takes about an hour at CSC, see breakdown in the results section later)
     ```shell
+    # Copy network safe to temp safe
     time rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
+    # Copy network cog to temp cog
     time rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
+    # Copy network zarr to temp zarr
     time rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
-    mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time rsync -r $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH/ $DSLAB_S2L1C_TEMP_ZIPZARR_PATH/
+    # Copy network zipzarr to temp zipzarr
+    mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time cp $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
     ```
-    Zipped Zarr can (alternatively) be copied from S3 to temp, which better reflects the planned machine learning use case:
+    Zipped Zarr can also be copied from S3 to temp, which better reflects the planned machine learning use case:
     ```shell
+    # Copy s3 zipzarr to temp zipzarr
     mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
     ```
-    And zipped Zarr can also be extracted to Zarr, which is interesting to time:
+    Zipped Zarr in temp can also be extracted to Zarr in temp, which is interesting to time (took 17 minutes on HAMK GPU server):
 
-    TODO
+    ```shell
+    # Unzip temp zipzarr to temp zarr
+    mkdir -p $DSLAB_S2L1C_TEMP_ZARR_PATH; time unzip $DSLAB_S2L1C_TEMP_ZIPZARR_PATH -d $DSLAB_S2L1C_TEMP_ZARR_PATH
+    ```
 
 7. Benchmark: (slow, should be under 3 hours)
     ```shell
+    # Benchmark
     python3 -m sentinel2_l1c.benchmark_patch_load
     ```
 
-On CSC Puhti, for benchmarking a compute node's local NVMe storage, the Slurm batch script below contains steps 5 (copy files from network storage to NVMe storage) and 6 (benchmark) above. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`.
+On CSC Puhti, for benchmarking different formats on a compute node's local NVMe storage as well as for measuring copy and unzip times, the Slurm batch script does steps 6 (copy SAFE, COG, Zarr, and Zipzarr from network storage to NVMe storage; copy zipped Zarr and Zarr from S3 to NVMe storage; in NVMe, unzip zipped Zarr to Zarr) and 7 (benchmark) above. Fill in your CSC username and project number in place of the placeholders `<USERNAME>` and `<PROJECT_NUMBER>`. 
 
 ```shell
 #!/bin/bash
@@ -290,12 +319,19 @@ set -a; source .env; set +a
 module load allas
 module load geoconda
 source ./.venv/bin/activate
-echo Copying SAFE from network to temp
+echo Copy network safe to temp safe
 time rsync -r $DSLAB_S2L1C_NETWORK_SAFE_PATH/ $DSLAB_S2L1C_TEMP_SAFE_PATH/
-echo Copying COG from network to temp
+echo Copy network cog to temp cog
 time rsync -r $DSLAB_S2L1C_NETWORK_COG_PATH/ $DSLAB_S2L1C_TEMP_COG_PATH/
-echo Copying Zarr from network to temp
+echo Copy network zarr to temp zarr
 time rsync -r $DSLAB_S2L1C_NETWORK_ZARR_PATH/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
+echo Copy network zipzarr to temp zipzarr
+mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time cp $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
+echo Copy s3 zipzarr to temp zipzarr
+mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
+echo Unzip temp zipzarr to temp zarr
+mkdir -p $DSLAB_S2L1C_TEMP_ZARR_PATH; time unzip $DSLAB_S2L1C_TEMP_ZIPZARR_PATH -d $DSLAB_S2L1C_TEMP_ZARR_PATH
+echo Benchmark
 python3 -m sentinel2_l1c.benchmark_patch_load
 ```
 
