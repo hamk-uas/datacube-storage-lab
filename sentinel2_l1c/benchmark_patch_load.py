@@ -1,6 +1,5 @@
 import numpy as np
 import boto3
-import rasterio
 import time
 import zarr
 import pathlib
@@ -12,16 +11,17 @@ import re
 import rioxarray
 import json
 import datetime
-#import logging
-#import http.client
 import s3fs
 import argparse
 from pathlib import Path
 import xmltodict
+import zarr.storage
 
 if int(zarr.__version__.split(".")[0]) < 3:
     raise ImportError("zarr version 3 or higher is required. Current version: {zarr.__version__}")
 
+#import logging
+#import http.client
 #http.client.HTTPConnection.debuglevel = 1
 #logging.basicConfig()
 #logging.getLogger().setLevel(logging.DEBUG)
@@ -88,7 +88,6 @@ def str_transform_to_transform(matrix_string):
     #| 0.00, 0.00, 1.00|
     # will convert to:
     #(300000.0, 60.0, 0.0, 6800040.0, 0.0, -60.0)
-
     # Remove unwanted characters and split into rows
     rows = matrix_string.strip().split('\n')
     # Extract numerical values from each row
@@ -192,7 +191,12 @@ def year_datacube_benchmark_cog(year, patch_crs_coords, folder, storage="filesys
     duration = time.time() - start
     return duration, band_group_datacubes
 
-def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, storage="filesystem", s3_endpoint=None, s3_bucket=None):
+class S3ZipStore(zarr.storage.ZipStore):
+    def __init__(self, path: s3fs.S3File) -> None:
+        super().__init__(path="", mode="r")
+        self.path = path
+
+def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, storage="filesystem", s3_endpoint=None, s3_bucket=None, zip=None):
     start = time.time()
     band_group_datacubes = {}
     for band_group in band_groups.keys():
@@ -202,18 +206,22 @@ def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, stor
             abs(patch_crs_coords[3]-patch_crs_coords[1])//band_groups[band_group]["resolution"],
             abs(patch_crs_coords[2]-patch_crs_coords[0])//band_groups[band_group]["resolution"]
         ))
-    if storage == "s3":
-        s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
-        zarr_store = zarr.storage.FsspecStore(fs=s3, read_only=True, path=s3_bucket)
-
-    elif storage == "filesystem":
-        zarr_store = zarr.storage.LocalStore(f'{folder}/', read_only=True)
-    #zarr_root = zarr.open(zarr_store, mode='r', zarr_format=3, use_consolidated=False)
-    #tile_zarr_group = zarr_root[tile]
-    #year_zarr_group = tile_zarr_group[f"{year}"]
+    if zip is not None:
+        if storage == "s3":
+            s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=False)
+            file = s3.open(f"s3://{s3_bucket}/{zip}")
+            zarr_store = S3ZipStore(file)
+        elif storage == "filesystem":
+            zarr_store = zarr.storage.ZipStore(zip, mode='r')
+    else:
+        if storage == "s3":
+            s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
+            zarr_store = zarr.storage.FsspecStore(fs=s3, read_only=True, path=s3_bucket)
+        elif storage == "filesystem":
+            zarr_store = zarr.storage.LocalStore(f'{folder}/', read_only=True)
     for band_group in band_groups.keys():
-        ds = xr.open_zarr(store=zarr_store, group=f"{tile}/{year}/{band_group}", zarr_format=3, chunks={}, consolidated=False)
-        #crs = ds.attrs.get("crs", None)
+        print(f"/{tile}/{year}/{band_group}")
+        ds = xr.open_zarr(store=zarr_store, group=f"/{tile}/{year}/{band_group}", zarr_format=3, chunks={}, consolidated=False)
         geo_transform = str_transform_to_transform(ds.attrs.get("transform", None))
         upper_left_x, upper_left_y, lower_right_x, lower_right_y = get_patch_image_coords(geo_transform, *patch_crs_coords)
         patch_data = ds['data'].data[:, :, upper_left_y:lower_right_y, upper_left_x:lower_right_x]  # Uses Dask array slicing
@@ -233,7 +241,7 @@ def parse_arguments():
 
     defaults = {
         "storages": ["network", "temp", "s3"],
-        "formats": ["safe", "cog", "zarr"],
+        "formats": ["safe", "cog", "zarr", "zipzarr"],
         "num_repeats": 10,
         "year": bounding_cube["year"],
         "tile": bounding_cube["tile"],
@@ -256,7 +264,7 @@ def parse_arguments():
         '--formats',
         type=str,
         nargs='+',
-        choices=["safe", "cog", "zarr"],
+        choices=["safe", "cog", "zarr", "zipzarr"],
         default=defaults["formats"],
         help=f'List of space-separated ids of formats to benchmark, default: {" ".join(defaults["formats"])}'
     )
@@ -319,9 +327,7 @@ def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2):
     log = {
         "tile": tile,
         "year": year,
-        "results": {
-
-        }
+        "results": {}
     }
     for storage in storages:
         log["results"][storage] = {}
@@ -362,6 +368,13 @@ def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2):
                         duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"])
                     elif (storage == "s3"):
                         duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZARR_BUCKET"])
+                elif format == "zipzarr":
+                    if (storage == "temp"):
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, zip=os.environ["DSLAB_S2L1C_TEMP_ZIPZARR_PATH"])
+                    elif (storage == "network"):
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, zip=os.environ["DSLAB_S2L1C_NETWORK_ZIPZARR_PATH"])
+                    elif (storage == "s3"):
+                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZIPZARR_BUCKET"], zip=os.environ["DSLAB_S2L1C_S3_ZIPZARR_KEY"])
                 if repeat > 0:
                     log["results"][storage][format]["total_duration"] += duration
                     log["results"][storage][format]["durations"].append(duration)

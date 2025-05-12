@@ -311,7 +311,7 @@ On CSC Puhti, for benchmarking different formats on a compute node's local NVMe 
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=80G
 #SBATCH --partition=small
-#SBATCH --gres=nvme:750
+#SBATCH --gres=nvme:1000
 #SBATCH --time=3-00:00:00
 
 cd /users/<USERNAME>/datacube-storage-lab
@@ -344,7 +344,7 @@ sbatch job.sh
 As the benchmarking is a one-time thing you could also start an equivalent interactive job and enter the commands from the batch script manually, to ensure they work:
 
 ```shell
-srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-task=40 --mem=80G --partition=small --gres=nvme:750 --time=3:00:00 --pty bash
+srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-task=40 --mem=80G --partition=small --gres=nvme:1000 --time=3:00:00 --pty bash
 ```
 
 ### Intake SAFE module
@@ -410,7 +410,7 @@ Chunk sizes for time, band, y, x (defined and editable in `sentinel2_l1c/utils.p
 
 Command line options:
 * `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark, default: `network temp s3`
-* `--formats <SPACE-SEPARATED STRINGS>` — Formats to benchmark, default: `safe cog zarr`
+* `--formats <SPACE-SEPARATED STRINGS>` — Formats to benchmark, default: `safe cog zarr zipzarr`
 * `--num_repeats <INTEGER>` — Number of repeat (2 or more), default: `10`
 * `--year <INTEGER>` — Year for which to load data, default: autodetected from SAFE
 * `--tile <STRING>` — Tile id for which to load data, default: autodetected from SAFE
@@ -647,8 +647,6 @@ xychart-beta
     y-axis "Mean load time (s)" 0 --> 200
     bar [99.8, 8.72, 381, 9.6, 15.4, 1.07]
     bar [0, 0, 0, 0, 0, 0, 0, 0, 0]
-
-    
 ```
 
 The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 1.07.
@@ -657,6 +655,7 @@ The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 
 
 ### Zipped patch time series load time, Zarr time chunk sizes 20, 40, 80
 
+TODO
 
 ## Authors
 
