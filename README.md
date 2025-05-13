@@ -406,7 +406,7 @@ Chunk sizes for time, band, y, x (defined and editable in `sentinel2_l1c/utils.p
 
 ### Benchmark load times module
 
-`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. Dask parallelization is used in loading. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE and S3 Zarr benchmarks, network storage files are used to determine the corresponding object paths in S3. This emulates a catalog stored in the network storage.
+`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. Dask parallelization is used in loading. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE, S3 Zarr and S3 zipped Zarr benchmarks, network storage files are used to determine the tile(s) and year(s). This emulates a catalog stored in the network storage.
 
 Command line options:
 * `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark, default: `network temp s3`
@@ -614,12 +614,11 @@ The times in seconds were: Allas: 6379, 121, 11.0; /scratch: 1041, 200, 8.0; NVM
 Zarr has quite many small files, and it's worse with the smaller resolutions:
 ![histo_zarr10.png](https://github.com/user-attachments/assets/10a3e85f-41f3-451a-921b-998febe1448a)
 
-
 For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 
 ### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
 
-Compared to Zarr with a time chunk size of 10 for all bands, time chunk sizes 20, 40, 80 reduce the number of small files but for low resolutions the files are disproportionally small in size. There are not that many of those files so it might not be a big problem. It might actually be beneficial when still updating the Zarr.
+Compared to Zarr with a time chunk size of 10 for all bands, time chunk sizes 20, 40, 80 reduce the number of small files but for low resolutions the files are disproportionally small in size. There are not that many of those files so it might not be a big problem. The small size might actually be beneficial when still updating the Zarr.
 
 ```mermaid
 ---
@@ -653,9 +652,37 @@ The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 
 
 ![histo_zarr20_40_80.png](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
 
-### Zipped patch time series load time, Zarr time chunk sizes 20, 40, 80
+### Zarr and zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80
 
-TODO
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
+            plotColorPalette: "#fff8, #000"
+---
+xychart-beta
+    title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
+    x-axis ["Allas S3 Zarr", "Allas S3 zipped Zarr", "NVMe Zarr", "NVMe zipped Zarr"]
+    y-axis "Mean load time (s)" 0 --> 26
+    bar [7.53, 23.9, 1.12, 3.21]
+    bar [0, 0, 0, 0, 0, 0, 0, 0, 0]
+```
+
+The times in seconds were: Allas S3 Zarr: 7.53, Allas S3 zipped Zarr: 23.9, NVMe Zarr: 1.12, NVMe zipped Zarr: 3.21.
 
 ## Authors
 
