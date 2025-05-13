@@ -650,7 +650,7 @@ xychart-beta
 
 The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 1.07.
 
-![histo_zarr20_40_80.png](https://github.com/user-attachments/assets/3b7d3e34-c7f6-43e0-a1c1-a55353d89c0c)
+![histo_zarr20_40_80.png](img/histo_zarr20_40_80.png)
 
 ### Zarr and zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80
 
