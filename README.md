@@ -476,7 +476,7 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 ## Sentinel 2 results and conclusions
 
-A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
+A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy or unzip time from CSC Puhti /scratch network drive or CSC Allas S3 to CSC Puhti compute node local NVMe:
 
 |Format|Files|Size (GiB)|Time (minutes)|Action|From|To|
 |-|-|-|-|-|-|-|
