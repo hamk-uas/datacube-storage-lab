@@ -652,7 +652,7 @@ The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 
 
 ![histo_zarr20_40_80.png](img/histo_zarr20_40_80.png)
 
-### Zarr and zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80
+### Zarr and zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 12, 2025)
 
 ```mermaid
 ---
