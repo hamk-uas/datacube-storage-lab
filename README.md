@@ -263,13 +263,13 @@ The standard workflow consists of of the following steps:
     **Not usually needed**, but you can also copy back from S3 to network storage, useful if you did the earlier steps in another system: (slow, an hour or so at CSC Puhti)
     ```shell
     # Copy s3 safe to network safe
-    mkdir -p $DSLAB_S2L1C_NETWORK_SAFE_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/ $DSLAB_S2L1C_NETWORK_SAFE_PATH/
+    mkdir -p $DSLAB_S2L1C_NETWORK_SAFE_PATH; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_SAFE_BUCKET/ $DSLAB_S2L1C_NETWORK_SAFE_PATH/
     # Copy s3 cog to network cog
-    mkdir -p $DSLAB_S2L1C_NETWORK_COG_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_COG_BUCKET/ $DSLAB_S2L1C_NETWORK_COG_PATH/
+    mkdir -p $DSLAB_S2L1C_NETWORK_COG_PATH; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_COG_BUCKET/ $DSLAB_S2L1C_NETWORK_COG_PATH/
     # Copy s3 zarr to network zarr
-    mkdir -p $DSLAB_S2L1C_NETWORK_ZARR_PATH; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/ $DSLAB_S2L1C_NETWORK_ZARR_PATH/
+    mkdir -p $DSLAB_S2L1C_NETWORK_ZARR_PATH; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/ $DSLAB_S2L1C_NETWORK_ZARR_PATH/
     # Copy s3 zipzarr to network zipzarr
-    mkdir -p "$(dirname "$DSLAB_S2L1C_NETWORK_ZIPZARR_PATH")"; s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH
+    mkdir -p "$(dirname "$DSLAB_S2L1C_NETWORK_ZIPZARR_PATH")"; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH
     ```
 6. Prepare temp storage for benchmarking by copying data to it from network storage: (altogether takes about an hour at CSC, see breakdown in the results section later)
     ```shell
@@ -282,8 +282,10 @@ The standard workflow consists of of the following steps:
     # Copy network zipzarr to temp zipzarr
     mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time cp $DSLAB_S2L1C_NETWORK_ZIPZARR_PATH $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
     ```
-    Zipped Zarr can also be copied from S3 to temp, which better reflects the planned machine learning use case:
+    Zarr and zipped Zarr can also be copied from S3 to temp, which better reflects the planned machine learning use case:
     ```shell
+    # Copy s3 zipzarr to temp zipzarr
+    mkdir -p $DSLAB_S2L1C_TEMP_ZARR_PATH; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZARR_BUCKET/ $DSLAB_S2L1C_TEMP_ZARR_PATH/
     # Copy s3 zipzarr to temp zipzarr
     mkdir -p "$(dirname "$DSLAB_S2L1C_TEMP_ZIPZARR_PATH")"; time s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE get -r s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET/$DSLAB_S2L1C_S3_ZIPZARR_KEY $DSLAB_S2L1C_TEMP_ZIPZARR_PATH
     ```
@@ -347,7 +349,7 @@ As the benchmarking is a one-time thing you could also start an equivalent inter
 srun --account=project_<PROJECT_NUMBER> --job-name=dslab --ntasks=1 --cpus-per-task=40 --mem=80G --partition=small --gres=nvme:1000 --time=3:00:00 --pty bash
 ```
 
-### Intake SAFE module
+### Module: Intake SAFE
 
 To intake Sentinel 2 L1C images for a lengthy time range, do not run `sentinel2_l1c.intake_cdse_s3` directly but instead run `sentinel2_l1c.intake_cdse_s3_year` for yearly intake, described in the next section.
 
@@ -364,7 +366,7 @@ Example: Download all images from a single tile 35VLH from a single UTC day 2024
 python3 -m sentinel2_l1c.intake_cdse_s3 --tile_id 35VLH --time_start 2024-02-21T00:00:00Z --time_end 2024-02-22T00:00:00Z
 ```
 
-### Intake SAFE year module
+### Module: Intake SAFE year
 
 Querying the CDSE STAC API with a large time range brings uncertainties like hitting some API limit and could also lead to pagination of the results which would need to be handled. It is safer to just loop through the days and to make a separate query for each day.
 
@@ -381,13 +383,13 @@ Example: Download images for UTC year 2024 for tile 35VLH:
 python3 -m sentinel2_l1c.intake_cdse_s3_year --year_start 2024 --year_end 2025 --tile_id 35VLH
 ```
 
-### Convert SAFE to COG module
+### Module: Convert SAFE to COG
 
 `python3 -m sentinel2_l1c.convert_safe_to_cog` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to COGs in `$DSLAB_S2L1C_NETWORK_COG_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
 
 The conversion to COG is done by stacking all images at each 10m, 20m, and 60m resoluton into a temporary uncompressed GeoTIFF, by adding metadata, and by creating for each resolution a COG using [rio-cogeo](https://cogeotiff.github.io/rio-cogeo/) with default arguments. This results in using Deflate compression and chunk sizes 512x512 at each resolution and also creates overviews at a few fractional resolutions.
 
-### Convert SAFE to Zarr module
+### Module: Convert SAFE to Zarr
 
 `python3 -m sentinel2_l1c.convert_safe_to_zarr` — Convert all collected Sentinel 2 L1C SAFE format images in `$DSLAB_S2L1C_NETWORK_SAFE_PATH` to Zarr in `$DSLAB_S2L1C_NETWORK_ZARR_PATH`. There are no command line arguments. The source SAFE files will not be removed or altered.
 
@@ -404,7 +406,7 @@ Chunk sizes for time, band, y, x (defined and editable in `sentinel2_l1c/utils.p
 * 20 m resolution: 40, max, 256, 256
 * 60 m resolution: 80, max, 128, 128
 
-### Benchmark load times module
+### Module: Benchmark load times
 
 `python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. Dask parallelization is used in loading. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE, S3 Zarr and S3 zipped Zarr benchmarks, network storage files are used to determine the tile(s) and year(s). This emulates a catalog stored in the network storage.
 
@@ -476,14 +478,24 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy time from CSC Puhti /scratch network drive to CSC Puhti compute node local NVMe:
 
-|Format|Files|Size (GiB)|Copy time from /scratch to NVMe (minutes)|
-|-|-|-|-|
-|SAFE|13332|115|24|
-|COG|768|200|11|
-|Zarr 10*|24487|192|71|
-|Zarr 20, 40, 80*|8562|192|30|
+|Format|Files|Size (GiB)|Time (minutes)|Action|From|To|
+|-|-|-|-|-|-|-|
+|SAFE|13332|115|24|Copy|/scratch|NVMe|
+|COG|768|200|11|Copy|/scratch|NVMe|
+|Zarr 10*|24487|192|71|Copy|/scratch|NVMe|
+|Zarr 20, 40, 80*|8562|192|30|Copy|/scratch|NVMe|
+|same as above|||27|Copy|Allas S3|NVMe|
+|Zipped Zarr 20, 40, 80*|1|192|10|Copy|/scratch|NVMe|
+|same as above|||12|Copy|Allas S3|NVMe|
+|same as above|||14|Unzip|NVMe|NVMe|
 
 *) "Zarr 10" and "Zarr 20, 40, 80" (current configuration) refer to the two time chunking cases below.
+
+To summarize the results (with Zarr using the 20, 40 80 time chunking), if machine learning training is bottlenecked by data loading, then the highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying (and unzipping) the Zarr to local NVMe in the beginning of the training run:
+
+![throughput.png](img/throughput.png)
+
+The estimated throughputs are 6884, 43907, 2169, 15476, 44035 time series per 3 days (maximum job run time at CSC Puhti).
 
 To generate File size histograms you can use the following commands and Python code:
 
