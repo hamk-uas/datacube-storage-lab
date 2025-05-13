@@ -497,6 +497,8 @@ To summarize the results (with Zarr using the 20, 40 80 time chunking), if machi
 
 The estimated throughputs are 6884, 43907, 2169, 15476, 44035 time series per 3 days (maximum job run time at CSC Puhti).
 
+There is still room for improvement in the zipped Zarr approach. ZipStore of zarr 3.0.7 uses a synchronous ZipFile, preventing use of parallel workers. A new fully async implementation of ZipStore could be made. Alternatively, the copy-and-unzip approach could potentially be done in a streaming way from S3 rather than by copying to NVMe as a first step.
+
 To generate File size histograms you can use the following commands and Python code:
 
 ```shell
