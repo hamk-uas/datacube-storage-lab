@@ -1,7 +1,5 @@
 # datacube-storage-lab
 
-(Work in progress: Zipped Zarr implementation is unfinished although it is already partially documented here.)
-
 There is a need to evaluate storage systems (for the authors of this repository, mainly those available on CSC – IT Center for Science, Finland supercomputer Puhti) and storage formats for multi-terabyte spatial data modalities for training and serving of machine learning (ML) models operating on multimodal geodata patch time series. In the present repository we provide Python code for intake of such data from external sources, for format conversion, and for benchmarking alternative storage systems and formats, concentrating on Sentinel 2 Level-1C data.
 
 Data storage benchmark process diagram:
@@ -476,7 +474,7 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 ## Sentinel 2 results and conclusions
 
-A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and copy or unzip time from CSC Puhti /scratch network drive or CSC Allas S3 to CSC Puhti compute node local NVMe:
+A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and measured action timings:
 
 |Format|Files|Size (GiB)|Time (minutes)|Action|From|To|
 |-|-|-|-|-|-|-|
@@ -498,6 +496,8 @@ To summarize the results (with Zarr using the 20, 40 80 time chunking), if machi
 The estimated throughputs are 6884, 43907, 2169, 15476, 44035 time series per 3 days (maximum job run time at CSC Puhti).
 
 There is still room for improvement in the zipped Zarr approach. ZipStore of zarr 3.0.7 uses a synchronous ZipFile, preventing use of parallel workers. A new fully async implementation of ZipStore could be made. Alternatively, the copy-and-unzip approach could potentially be done in a streaming way from S3 rather than by copying to NVMe as a first step.
+
+Zipped zarr v3 [will likely be](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/4-storage-formats.html) ESA's future delivery format for satellite images.
 
 To generate File size histograms you can use the following commands and Python code:
 
