@@ -123,17 +123,17 @@ In the local clone of the present repository, create a file `.env` and configure
 DSLAB_S2L1C_NETWORK_SAFE_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_safe
 DSLAB_S2L1C_NETWORK_COG_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_cog
 DSLAB_S2L1C_NETWORK_ZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr
-DSLAB_S2L1C_NETWORK_ZIPZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zarr.zip
+DSLAB_S2L1C_NETWORK_ZIPZARR_PATH=/scratch/project_<PROJECT_NUMBER>/sentinel2_l1c_zipzarr.zip
 DSLAB_S2L1C_TEMP_SAFE_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_safe"
 DSLAB_S2L1C_TEMP_COG_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_cog"
 DSLAB_S2L1C_TEMP_ZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr"
-DSLAB_S2L1C_TEMP_ZIPZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zarr.zip"
+DSLAB_S2L1C_TEMP_ZIPZARR_PATH="${LOCAL_SCRATCH}/sentinel2_l1c_zipzarr.zip"
 DSLAB_S2L1C_S3_PROFILE=s3allas
 DSLAB_S2L1C_S3_SAFE_BUCKET=sentinel2_l1c_safe
 DSLAB_S2L1C_S3_COG_BUCKET=sentinel2_l1c_cog
 DSLAB_S2L1C_S3_ZARR_BUCKET=sentinel2_l1c_zarr
 DSLAB_S2L1C_S3_ZIPZARR_BUCKET=sentinel2_l1c_zipzarr
-DSLAB_S2L1C_S3_ZIPZARR_KEY=sentinel2_l1c_zarr.zip
+DSLAB_S2L1C_S3_ZIPZARR_KEY=sentinel2_l1c_zipzarr.zip
 DSLAB_LOG_FOLDER=/scratch/project_<PROJECT_NUMBER>/dslab_logs
 ```
 
@@ -495,7 +495,7 @@ To summarize the results (with Zarr using the 20, 40 80 time chunking), if machi
 
 The estimated throughputs are 6884, 43907, 2169, 15476, 44035 time series per 3 days (maximum job run time at CSC Puhti).
 
-There is still room for improvement in the zipped Zarr approach. ZipStore of zarr 3.0.7 uses a synchronous ZipFile, preventing use of parallel workers. See [discussion in the Zarr repo](https://github.com/zarr-developers/zarr-python/discussions/1613). A new fully async implementation of ZipStore could be made. Alternatively, the copy-and-unzip approach could potentially be done in a streaming way from S3 rather than by copying to NVMe as a first step.
+There is still room for improvement in the zipped Zarr approach. ZipStore of zarr 3.0.7 uses, unfortunately, a synchronous ZipFile, preventing concurrent requests. See [discussion in the Zarr repo](https://github.com/zarr-developers/zarr-python/discussions/1613). A new fully async implementation of ZipStore could be made. Alternatively, the copy-and-unzip approach could potentially be done in a streaming way from S3 rather than by copying to NVMe as a first step.
 
 Zipped zarr v3 [will likely be](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/4-storage-formats.html) ESA's future delivery format for satellite images.
 
