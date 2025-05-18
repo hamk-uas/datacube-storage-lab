@@ -474,6 +474,8 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 ## Sentinel 2 results and conclusions
 
+(This summary doesn't yet include the latest async zipped Zarr results.)
+
 A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and measured action timings on CSC Puhti (/scratch is a network drive, NVMe is a local drive):
 
 |Format|Files|Size (GiB)|Time (minutes)|Action|From|To|
@@ -666,7 +668,7 @@ The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 
 
 ![histo_zarr20_40_80.png](img/histo_zarr20_40_80.png)
 
-### Zarr and zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 12, 2025)
+### Zarr and sync zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 12, 2025)
 
 ```mermaid
 ---
@@ -693,10 +695,44 @@ xychart-beta
     x-axis ["Allas S3 Zarr", "Allas S3 zipped Zarr", "NVMe Zarr", "NVMe zipped Zarr"]
     y-axis "Mean load time (s)" 0 --> 26
     bar [7.53, 23.9, 1.12, 3.21]
-    bar [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    bar [0, 0, 0, 0]
 ```
 
 The times in seconds were: Allas S3 Zarr: 7.53, Allas S3 zipped Zarr: 23.9, NVMe Zarr: 1.12, NVMe zipped Zarr: 3.21.
+
+### Zarr and async zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 18, 2025)
+
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
+            plotColorPalette: "#fff8, #000"
+---
+xychart-beta
+    title "Sentinel 2 L1C patch time series — S3 from CSC Puhti, NVMe from HAMK"
+    x-axis ["Allas S3 Zarr", "S3 zipped Zarr (async)", "NVMe Zarr", "NVMe zipped Zarr (async)"]
+    y-axis "Mean load time (s)" 0 --> 8
+    bar [7.39, 7.17, 1.94, 1.67]
+    bar [0, 0, 0, 0]
+```
+
+The times in seconds were: Allas S3 Zarr: 7.39, Allas S3 zipped Zarr: 7.17, NVMe Zarr: 1.94, NVMe zipped Zarr: 1.67.
+
+(These latest async zipped Zarr results have not yet made it to the summary.)
 
 ## Authors
 

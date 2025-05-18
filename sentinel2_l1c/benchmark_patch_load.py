@@ -18,6 +18,8 @@ from pathlib import Path
 import xmltodict
 import zarr.storage
 from async_zipfs import ReadOnlyZipFileSystem
+from fsspec.implementations.local import LocalFileSystem
+from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 from .utils import band_groups
 
 if int(zarr.__version__.split(".")[0]) < 3:
@@ -228,7 +230,13 @@ def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, stor
                 file = s3.open(f"s3://{s3_bucket}/{zip}")
                 zarr_store = S3ZipStore(file)
         elif storage == "filesystem":
-            zarr_store = zarr.storage.ZipStore(zip, mode='r')
+            if async_zipfs:
+                local_fs = LocalFileSystem()
+                async_local_fs = AsyncFileSystemWrapper(local_fs)
+                zipfs = ReadOnlyZipFileSystem(async_local_fs, zip)
+                zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
+            else:
+                zarr_store = zarr.storage.ZipStore(zip, mode='r')
     else:
         if storage == "s3":
             s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)

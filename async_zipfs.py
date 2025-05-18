@@ -15,11 +15,19 @@ class ReadOnlyZipFileSystem(AsyncFileSystem):
     ```Python
     import s3fs
 
+    # Zipped Zarr in S3
     s3 = s3fs.S3FileSystem(anon=True, endpoint_url=S3_ENDPOINT, asynchronous=True)
     zipfs = ReadOnlyZipFileSystem(s3, f"{S3_BUCKET}/{ZIP_PATH}")
     zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
-    ```
 
+    # Zipped Zarr in local file system
+    from fsspec.implementations.local import LocalFileSystem
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+    local_fs = LocalFileSystem()
+    async_local_fs = AsyncFileSystemWrapper(local_fs)
+    zipfs = ReadOnlyZipFileSystem(async_local_fs, ZIP_PATH)
+    zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
+    ```
 
     Reads 64KB from the end of the zip file to capture the ZIP64 end of central
     directory (EOCD), the ZIP64 EOCD locator, and the standard EOCD, using
@@ -42,7 +50,6 @@ class ReadOnlyZipFileSystem(AsyncFileSystem):
     MAX_ZIP_TAIL_READ = 64 * 1024
 
     def __init__(self, fs: AsyncFileSystem, path: str, **kwargs):
-        print("__init__", fs, path, **kwargs)
         """Initialize the ReadOnlyZipFileSystem.
 
         Args:
