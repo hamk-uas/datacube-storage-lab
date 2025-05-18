@@ -724,13 +724,13 @@ config:
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — S3 from CSC Puhti, NVMe from HAMK"
-    x-axis ["Allas S3 Zarr", "S3 zipped Zarr (async)", "NVMe Zarr", "NVMe zipped Zarr (async)"]
+    x-axis ["Allas S3 Zarr", "Allas S3 zipped Zarr (async)", "NVMe Zarr", "NVMe zipped Zarr (async)"]
     y-axis "Mean load time (s)" 0 --> 8
     bar [7.39, 7.17, 1.94, 1.67]
     bar [0, 0, 0, 0]
 ```
 
-The times in seconds were: Allas S3 Zarr: 7.39, Allas S3 zipped Zarr: 7.17, NVMe Zarr: 1.94, NVMe zipped Zarr: 1.67.
+The times in seconds were: Allas S3 Zarr: 7.39, Allas S3 zipped Zarr (async): 7.17, NVMe Zarr: 1.94, NVMe zipped Zarr (async): 1.67.
 
 (These latest async zipped Zarr results have not yet made it to the summary.)
 
