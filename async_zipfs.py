@@ -40,7 +40,7 @@ class ReadOnlyZipFileSystem(AsyncFileSystem):
     Assumes that there are no gaps between file headers and files. This way the
     file headers need not be read, because the file offset will be the offset
     of the next file header (or CD for the last file) minus the file size. File
-    dates (which reside in the headers?) are not available.
+    datetimes are not available.
 
     While not currently supported, support for compressed zip files could be
     implemented by reading the file headers (ending the read at the next header
@@ -247,7 +247,6 @@ class ReadOnlyZipFileSystem(AsyncFileSystem):
                             # Only parse variables that were marked as ZIP64
                             if cd_file_header[var] is None:
                                 cd_file_header[var] = struct.unpack_from(f'<{var_length_to_format[length]}', cd_data, pos)[0]
-                                #print(var, cd_file_header[var])
                                 pos += length
                     else:
                         if tag == 0x5455:
@@ -259,7 +258,6 @@ class ReadOnlyZipFileSystem(AsyncFileSystem):
                         else:
                             # Unknown extra field, skip it
                             None
-                            #print(f"Unknown tag 0x{tag:x}")
                         pos += size                     
                         if backup_pos + size != pos:
                             raise ValueError(f"Invalid extra field size in {self.path}")
@@ -270,9 +268,6 @@ class ReadOnlyZipFileSystem(AsyncFileSystem):
                 offset = cd_file_header['relative offset of local header']
 
                 # Skip comment
-                if comment_len > 0:
-                    #print(f"Skipped comment of length {comment_len}")
-                    None
                 pos += comment_len
 
                 # Detect directory
