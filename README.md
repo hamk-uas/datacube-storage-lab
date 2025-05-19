@@ -497,7 +497,7 @@ The chart below summarizes the results using CSC Allas and compute node NVMe (wi
 config:
     xyChart:
         width: 900
-        height: 600
+        height: 300
     themeVariables:
         xyChart:
             backgroundColor: "#000"
