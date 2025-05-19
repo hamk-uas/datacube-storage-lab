@@ -519,7 +519,7 @@ xychart-beta horizontal
     bar [0, 0, 0, 0, 0, 0]
 ```
 
-The estimated throughputs are 6945, 6868, 39973, 44237 5-day patch time series per 3 days of computation (maximum job run time at CSC Puhti). The highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying or optionay unzipping the Zarr or zipped Zarr to local NVMe in the beginning of the training run.
+The estimated throughputs are 6718, 42307, 6870, 37320, 44414 5-day patch time series per 3 days of computation (maximum job run time at CSC Puhti). The highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying or optionay unzipping the Zarr or zipped Zarr to local NVMe in the beginning of the training run.
 
 The zipped Zarr results in the above were obtained using a custom async fsspec file system for the files in a zip located in another async fsspec file system. This reduced load times three-fold compared to using the ZipStore of zarr 3.0.7 based on sync ZipFile. Because choosing between Zarr and zipped Zarr is hot topic and zipped Zarr v3 [might also be](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/4-storage-formats.html) ESA's future dissemination format for satellite images, I advertised the solution in a few places, [in a discussion](https://github.com/zarr-developers/zarr-python/discussions/1613) in the Zarr Python repo on zipped Zarr and S3, in [Pangeo Discourse](https://discourse.pangeo.io/t/whats-the-best-file-format-to-chose-for-raster-imagery-and-masks-products/4555), and in [an issue](https://github.com/csaybar/ESA-zar-zip-decision/issues/6) on a position piece opposing zipping of Zarrs for satellite image dissemination.
 
