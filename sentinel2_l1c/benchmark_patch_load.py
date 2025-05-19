@@ -199,7 +199,6 @@ class S3ZipStore(zarr.storage.ZipStore):
         super().__init__(path="", mode="r")
         self.path = path
 
-
 # Call from sync code using: asyncio.run(open_s3_file(s3_endpoint, s3_bucket, zip))
 async def open_s3_file(s3_endpoint, s3_bucket, s3_path):
     s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
@@ -209,7 +208,37 @@ async def open_s3_file(s3_endpoint, s3_bucket, s3_path):
     #await session.close()
     return data
 
-def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, storage="filesystem", s3_endpoint=None, s3_bucket=None, zip=None, async_zipfs=True):
+def get_s3_zipzarr_store(s3_endpoint, s3_bucket, zip_key, async_zipfs=True):
+    if async_zipfs:
+        s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
+        zipfs = ReadOnlyZipFileSystem(s3, f"{s3_bucket}/{zip_key}")
+        zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
+    else:
+        s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=False)
+        file = s3.open(f"s3://{s3_bucket}/{zip_key}")
+        zarr_store = S3ZipStore(file)
+    return zarr_store
+
+def get_zipzarr_store(zip_path, async_zipfs=True):
+    if async_zipfs:
+        local_fs = LocalFileSystem()
+        async_local_fs = AsyncFileSystemWrapper(local_fs)
+        zipfs = ReadOnlyZipFileSystem(async_local_fs, zip_path)
+        zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
+    else:
+        zarr_store = zarr.storage.ZipStore(zip_path, mode='r')
+    return zarr_store
+
+def get_s3_zarr_store(s3_endpoint, s3_bucket):
+    s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
+    zarr_store = zarr.storage.FsspecStore(fs=s3, read_only=True, path=s3_bucket)
+    return zarr_store
+
+def get_zarr_store(folder):
+    zarr_store = zarr.storage.LocalStore(f'{folder}/', read_only=True)
+    return zarr_store
+
+def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, zarr_store):
     start = time.time()
     band_group_datacubes = {}
     for band_group in band_groups.keys():
@@ -219,30 +248,6 @@ def year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=None, stor
             abs(patch_crs_coords[3]-patch_crs_coords[1])//band_groups[band_group]["resolution"],
             abs(patch_crs_coords[2]-patch_crs_coords[0])//band_groups[band_group]["resolution"]
         ))
-    if zip is not None:
-        if storage == "s3":
-            if async_zipfs:
-                s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
-                zipfs = ReadOnlyZipFileSystem(s3, f"{s3_bucket}/{zip}")
-                zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
-            else:
-                s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=False)
-                file = s3.open(f"s3://{s3_bucket}/{zip}")
-                zarr_store = S3ZipStore(file)
-        elif storage == "filesystem":
-            if async_zipfs:
-                local_fs = LocalFileSystem()
-                async_local_fs = AsyncFileSystemWrapper(local_fs)
-                zipfs = ReadOnlyZipFileSystem(async_local_fs, zip)
-                zarr_store = zarr.storage.FsspecStore(fs=zipfs, read_only=True, path="")
-            else:
-                zarr_store = zarr.storage.ZipStore(zip, mode='r')
-    else:
-        if storage == "s3":
-            s3 = s3fs.S3FileSystem(anon=True, endpoint_url=s3_endpoint, asynchronous=True)
-            zarr_store = zarr.storage.FsspecStore(fs=s3, read_only=True, path=s3_bucket)
-        elif storage == "filesystem":
-            zarr_store = zarr.storage.LocalStore(f'{folder}/', read_only=True)
     for band_group in band_groups.keys():
         #print(f"/{tile}/{year}/{band_group}")
         ds = xr.open_zarr(store=zarr_store, group=f"/{tile}/{year}/{band_group}", zarr_format=3, chunks={}, consolidated=False)
@@ -368,6 +373,25 @@ def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2, async_
                 "band_group_shapes": {},
                 "total_duration": 0,
             }
+    if "zarr" in formats or "zipzarr" in formats:
+        zarr_stores = {}
+        for storage in storages:
+            zarr_stores[storage] = {}
+            for format in filter(lambda x: x in ["zarr", "zipzarr"], formats):
+                if format == "zarr":
+                    if (storage == "temp"):
+                        zarr_stores[storage][format] = get_zarr_store(folder=os.environ["DSLAB_S2L1C_TEMP_ZARR_PATH"])
+                    elif (storage == "network"):
+                        zarr_stores[storage][format] = get_zarr_store(folder=os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"])
+                    elif (storage == "s3"):
+                        zarr_stores[storage][format] = get_s3_zarr_store(s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZARR_BUCKET"])
+                elif format == "zipzarr":
+                    if (storage == "temp"):
+                        zarr_stores[storage][format] = get_zipzarr_store(zip_path=os.environ["DSLAB_S2L1C_TEMP_ZIPZARR_PATH"], async_zipfs=async_zipfs)
+                    elif (storage == "network"):
+                        zarr_stores[storage][format] = get_zipzarr_store(zip_path=os.environ["DSLAB_S2L1C_NETWORK_ZIPZARR_PATH"], async_zipfs=async_zipfs)
+                    elif (storage == "s3"):
+                        zarr_stores[storage][format] = get_s3_zipzarr_store(s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZIPZARR_BUCKET"], zip_key=os.environ["DSLAB_S2L1C_S3_ZIPZARR_KEY"], async_zipfs=async_zipfs)
     random.seed(42)
     for repeat in range(num_repeats + 1):
         random.shuffle(storages)
@@ -391,20 +415,9 @@ def benchmark(storages, formats, num_repeats, year, tile, x1, y1, x2, y2, async_
                         duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_COG_PATH"])
                     elif (storage == "s3"):
                         duration, band_group_datacubes = year_datacube_benchmark_cog(year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_COG_PATH"], storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_COG_BUCKET"])
-                elif format == "zarr":
-                    if (storage == "temp"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_TEMP_ZARR_PATH"])
-                    elif (storage == "network"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, folder=os.environ["DSLAB_S2L1C_NETWORK_ZARR_PATH"])
-                    elif (storage == "s3"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZARR_BUCKET"])
-                elif format == "zipzarr":
-                    if (storage == "temp"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, zip=os.environ["DSLAB_S2L1C_TEMP_ZIPZARR_PATH"], async_zipfs=async_zipfs)
-                    elif (storage == "network"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, zip=os.environ["DSLAB_S2L1C_NETWORK_ZIPZARR_PATH"], async_zipfs=async_zipfs)
-                    elif (storage == "s3"):
-                        duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, storage="s3", s3_endpoint=s3_endpoint_url, s3_bucket=os.environ["DSLAB_S2L1C_S3_ZIPZARR_BUCKET"], zip=os.environ["DSLAB_S2L1C_S3_ZIPZARR_KEY"], async_zipfs=async_zipfs)
+                elif format == "zarr" or format == "zipzarr":
+                    zarr_store = zarr_stores[storage][format]
+                    duration, band_group_datacubes = year_datacube_benchmark_zarr(tile, year, patch_crs_coords, zarr_store)
                 if repeat > 0:
                     log["results"][storage][format]["total_duration"] += duration
                     log["results"][storage][format]["durations"].append(duration)

@@ -406,7 +406,7 @@ Chunk sizes for time, band, y, x (defined and editable in `sentinel2_l1c/utils.p
 
 ### Module: Benchmark load times
 
-`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. Dask parallelization is used in loading. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE, S3 Zarr and S3 zipped Zarr benchmarks, network storage files are used to determine the tile(s) and year(s). This emulates a catalog stored in the network storage.
+`python3 -m sentinel2_l1c.benchmark_patch_load` — Benchmark loading of patch time series data for random 5100m x 5100m patches (divisible by 10m, 20m, and 60m) within a single Sentinel 2 L1C tile, over a single year. Dask parallelization is used in loading. The year is determined automatically from one of the SAFE items. See the earlier section *Folder and S3 configuration* on configuring the storage paths. At a given repeat number, the benchmark will always use the same random number generator seed and should produce identical patches and identical shuffled storage and format orders for each run of the benchmark, unless the number of storages or formats is changed. In S3 SAFE, S3 Zarr and S3 zipped Zarr benchmarks, network storage files are used to determine the tile(s) and year(s). This emulates a catalog stored in the network storage. Zarr stores are persistent and opened in the beginning of the benchmark.
 
 Command line options:
 * `--storages <SPACE-SEPARATED STRINGS>` — Storages to benchmark, default: `network temp s3`
@@ -418,6 +418,7 @@ Command line options:
 * `--y1 <INTEGER>` — Vertical position of top left corner of tile in tile UTM zone CRS, default: autodetected from SAFE
 * `--x2 <INTEGER>` — Horizontal position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
 * `--y2 <INTEGER>` — Vertical position of bottom right corner of tile in tile UTM zone CRS, default: autodetected from SAFE
+* `--async_zipfs <BOOLEAN>` — Use a custom async filesystem to access zipped Zarrs, default: True.
 
 In preparation for benchmarking, intake should have been done just for a single tile and a single year and intake, format conversions, and copying to different storages must have completed. Otherwise different storages and formats may have slightly different but this can be verified from results.
 
@@ -474,8 +475,6 @@ The results will be written in `$DSLAB_LOG_FOLDER/sentinel2_l1c_YYYY-MM-DD_HH-mm
 
 ## Sentinel 2 results and conclusions
 
-(This summary doesn't yet include the latest async zipped Zarr results.)
-
 A single tile-year (35VLH, 2024) has the following number of files (command `tree`), total size (command `du -h --apparent-size –s .`), and measured action timings on CSC Puhti (/scratch is a network drive, NVMe is a local drive):
 
 |Format|Files|Size (GiB)|Time (minutes)|Action|From|To|
@@ -491,17 +490,42 @@ A single tile-year (35VLH, 2024) has the following number of files (command `tre
 
 *) "Zarr 10" and "Zarr 20, 40, 80" (current configuration) refer to the two time chunking cases below.
 
-To summarize the results (with Zarr using the 20, 40 80 time chunking), if machine learning training is bottlenecked by data loading, then the highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying (and unzipping) the Zarr to local NVMe in the beginning of the training run:
+The chart below summarizes the results using CSC Allas and compute node NVMe (with Zarr using the 20, 40 80 time chunking) for machine learning training steps determined by data loading:
 
-![throughput.png](img/throughput.png)
+```mermaid
+---
+config:
+    xyChart:
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            backgroundColor: "#000"
+            titleColor: "#fff"
+            xAxisLabelColor: "#fff"
+            xAxisTitleColor: "#fff"
+            xAxisTickColor: "#fff"
+            xAxisLineColor: "#fff"
+            yAxisLabelColor: "#fff"
+            yAxisTitleColor: "#fff"
+            yAxisTickColor: "#fff"
+            yAxisLineColor: "#fff"
+            plotColorPalette: "#48f8, #000"
+---
+xychart-beta horizontal
+    x-axis ["Zarr S3", "Zarr S3 → Zarr NVMe", "zipped Zarr S3", "zipped Zarr S3 → zipped Zarr NVMe", "zipped Zarr S3 → zipped Zarr NVMe → Zarr NVMe"]
+    y-axis "Machine learning training throughput (5-year patch time series / 3 days of compute)" 4000 --> 45000
+    bar [6718.3292243095, 42306.7540825549, 6869.8010595012, 37319.6290235888, 44413.9870445213]
+    bar [0, 0, 0, 0, 0, 0]
+```
 
-The estimated throughputs are 6884, 43907, 2169, 15476, 44035 time series per 3 days (maximum job run time at CSC Puhti).
+The estimated throughputs are 6945, 6868, 39973, 44237 5-day patch time series per 3 days of computation (maximum job run time at CSC Puhti). The highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying or optionay unzipping the Zarr or zipped Zarr to local NVMe in the beginning of the training run.
 
-There is still room for improvement in the zipped Zarr approach. ZipStore of zarr 3.0.7 uses, unfortunately, a synchronous ZipFile, preventing concurrent requests. See [discussion in the Zarr repo](https://github.com/zarr-developers/zarr-python/discussions/1613). A new fully async implementation of ZipStore could be made. Alternatively, the copy-and-unzip approach could potentially be done in a streaming way from S3 rather than by copying to NVMe as a first step.
+The zipped Zarr results in the above were obtained using a custom async fsspec file system for the files in a zip located in another async fsspec file system. This reduced load times three-fold compared to using the ZipStore of zarr 3.0.7 based on sync ZipFile. Because choosing between Zarr and zipped Zarr is hot topic and zipped Zarr v3 [might also be](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/4-storage-formats.html) ESA's future dissemination format for satellite images, I advertised the solution in a few places, [in a discussion](https://github.com/zarr-developers/zarr-python/discussions/1613) in the Zarr Python repo on zipped Zarr and S3, in [Pangeo Discourse](https://discourse.pangeo.io/t/whats-the-best-file-format-to-chose-for-raster-imagery-and-masks-products/4555), and in [an issue](https://github.com/csaybar/ESA-zar-zip-decision/issues/6) on a position piece opposing zipping of Zarrs for satellite image dissemination.
 
-Zipped zarr v3 [might be](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/4-storage-formats.html) ESA's future delivery format for satellite images.
+See the last link also for interesting ideas for improving SAFE and COG patch load times. The fact that we are aiming at laoding patch time series makes those ideas less useful for us, so it is unlikely that we will investigate them, considering how much faster Zarr and zipped Zarr already are.
 
-To generate File size histograms you can use the following commands and Python code:
+The file size histograms below were generated by these commands and Python code:
 
 ```shell
 find . -type f -exec du --apparent-size --block-size=1 {} + |grep B02_B03 >10m.txt
@@ -581,7 +605,7 @@ config:
             yAxisTitleColor: "#fff"
             yAxisTickColor: "#fff"
             yAxisLineColor: "#fff"
-            plotColorPalette: "#fff8, #000"
+            plotColorPalette: "#f888, #000"
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — HAMK GPU server"
@@ -614,7 +638,7 @@ config:
             yAxisTitleColor: "#fff"
             yAxisTickColor: "#fff"
             yAxisLineColor: "#fff"
-            plotColorPalette: "#fff8, #000"
+            plotColorPalette: "#f888, #000"
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
@@ -633,6 +657,8 @@ Zarr has quite many small files, and it's worse with the smaller resolutions:
 For CSC Allas S3 default project quotas 10 TiB, 1000 buckets, and 500k objects **a sensible organization is to store in each bucket a single tile over all years**. This enables storing a single tile over 20 years or estimated 3.84 TiB, 490k files. It would be simple to increase the Zarr time chunk size from 10 to 20 to approximately halve the number of files. This would also improve the copy time to NVMe. It might even be reasonable to increase time chunk size to 40. The size would likely stay the same and therefore only about 4 tiles could be stored over 10 years, altogether an estimated 8 Tib just under the default Allas quotas. Finland including associated sea areas are covered by a total of 77 tiles which would require about 150 TiB over 10 years. This includes 100% cloudy images. The decision on whether to enforce a cloud percentage threshold can be postponed to after initial training runs with a small number of tiles, as such filtering of the training data would also bias generative modeling results.
 
 ### Patch time series load time, Zarr time chunk sizes 20, 40, 80 (April 29, 2025)
+
+These results were with an inefficient sync Zarr ZipStore.
 
 Compared to Zarr with a time chunk size of 10 for all bands, time chunk sizes 20, 40, 80 reduce the number of small files but for low resolutions the files are disproportionally small in size. There are not that many of those files so it might not be a big problem. The small size might actually be beneficial when still updating the Zarr.
 
@@ -654,7 +680,7 @@ config:
             yAxisTitleColor: "#fff"
             yAxisTickColor: "#fff"
             yAxisLineColor: "#fff"
-            plotColorPalette: "#fff8, #000"
+            plotColorPalette: "#f888, #000"
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
@@ -670,6 +696,8 @@ The times in seconds were Allas S3: 99.8, 8.72; /scratch: 381, 9.6; NVMe: 15.4, 
 
 ### Zarr and sync zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 12, 2025)
 
+These results were with an inefficient sync Zarr ZipStore.
+
 ```mermaid
 ---
 config:
@@ -688,7 +716,7 @@ config:
             yAxisTitleColor: "#fff"
             yAxisTickColor: "#fff"
             yAxisLineColor: "#fff"
-            plotColorPalette: "#fff8, #000"
+            plotColorPalette: "#f888, #000"
 ---
 xychart-beta
     title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
@@ -700,7 +728,7 @@ xychart-beta
 
 The times in seconds were: Allas S3 Zarr: 7.53, Allas S3 zipped Zarr: 23.9, NVMe Zarr: 1.12, NVMe zipped Zarr: 3.21.
 
-### Zarr and async zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 18, 2025)
+### Zarr and async zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 19, 2025)
 
 ```mermaid
 ---
@@ -720,19 +748,19 @@ config:
             yAxisTitleColor: "#fff"
             yAxisTickColor: "#fff"
             yAxisLineColor: "#fff"
-            plotColorPalette: "#fff8, #000"
+            plotColorPalette: "#f888, #000"
 ---
 xychart-beta
-    title "Sentinel 2 L1C patch time series — S3 from CSC Puhti, NVMe from HAMK"
+    title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
     x-axis ["Allas S3 Zarr", "Allas S3 zipped Zarr (async)", "NVMe Zarr", "NVMe zipped Zarr (async)"]
     y-axis "Mean load time (s)" 0 --> 8
-    bar [7.39, 7.17, 1.94, 1.67]
+    bar [7.716204173564911, 7.546070046424866, 1.1104609894752502, 1.3312029433250427]
     bar [0, 0, 0, 0]
 ```
 
-The times in seconds were: Allas S3 Zarr: 7.39, Allas S3 zipped Zarr (async): 7.17, NVMe Zarr: 1.94, NVMe zipped Zarr (async): 1.67.
+The times in seconds were: Allas S3 Zarr: 7.72, Allas S3 zipped Zarr (async): 7.54, NVMe Zarr: 1.11, NVMe zipped Zarr (async): 1.33.
 
-(These latest async zipped Zarr results have not yet made it to the summary.)
+After obtaining these results, the Zarr stores in the benchmark were made persistent to reduce overhead with zipped Zarr. Zarr time label chunk size, which was found to be 1 by default (due to appending single images to the store) was also increased. No results are available yet for these changes.
 
 ## Authors
 

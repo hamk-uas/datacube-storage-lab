@@ -98,8 +98,13 @@ def convert(safe_from_folder = os.environ["DSLAB_S2L1C_NETWORK_SAFE_PATH"], zarr
                             encoding = {
                                 "data": {
                                     "compressors": compressor,
-                                    "chunks": (band_group_dict["time_chunk_size"], len(bands), band_group_dict["y_chunk_size"], band_group_dict["x_chunk_size"]),  # (Time, band, Y, X) chunk sizes
-                                }
+                                    "chunks": (band_group_dict["time_chunk_size"], len(bands), band_group_dict["y_chunk_size"], band_group_dict["x_chunk_size"])  # (Time, band, Y, X) chunk sizes
+                                },
+                                # Explicitly define chunk size for time labels because otherwise it's 1
+                                "time": {
+                                    "compressor": None,
+                                    "chunks": (10_000,)  # Very large number
+                                },
                             }
                             print(encoding)
                             ds.to_zarr(zarr_store, mode="w", group=band_group_zarrgroup.path, zarr_format=3, encoding=encoding, consolidated=False)
