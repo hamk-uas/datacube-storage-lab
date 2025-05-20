@@ -490,7 +490,7 @@ A single tile-year (35VLH, 2024) has the following number of files (command `tre
 
 *) "Zarr 10" and "Zarr 20, 40, 80" (current configuration) refer to the two time chunking cases below.
 
-The chart below summarizes the results using CSC Allas and compute node NVMe (with Zarr using the 20, 40 80 time chunking) for machine learning training steps determined by data loading:
+The chart below (calculated with `throughput.ods`) summarizes the results using CSC Allas and compute node NVMe (with Zarr using the 20, 40 80 time chunking) for machine learning training steps determined by data loading:
 
 ```mermaid
 ---
@@ -513,7 +513,7 @@ config:
             plotColorPalette: "#48f8, #000"
 ---
 xychart-beta horizontal
-    x-axis ["Zarr S3", "Zarr S3 → Zarr NVMe", "zipped Zarr S3", "zipped Zarr S3 → zipped Zarr NVMe", "zipped Zarr S3 → zipped Zarr NVMe → Zarr NVMe"]
+    x-axis ["S3 Zarr", "S3 Zarr → NVMe Zarr", "S3 zipped Zarr", "S3 zipped Zarr → NVMe zipped Zarr", "S3 zipped Zarr → NVMe zipped Zarr → NVMe Zarr"]
     y-axis "Machine learning training throughput (5-year patch time series / 3 days of compute)" 4000 --> 45000
     bar [6758.1579208241, 39378.9060052304, 7322.6316946076, 37045.2145583096, 41340.3074537667]
     bar [0, 0, 0, 0, 0, 0]
