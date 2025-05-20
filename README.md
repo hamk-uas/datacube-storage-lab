@@ -515,11 +515,11 @@ config:
 xychart-beta horizontal
     x-axis ["Zarr S3", "Zarr S3 → Zarr NVMe", "zipped Zarr S3", "zipped Zarr S3 → zipped Zarr NVMe", "zipped Zarr S3 → zipped Zarr NVMe → Zarr NVMe"]
     y-axis "Machine learning training throughput (5-year patch time series / 3 days of compute)" 4000 --> 45000
-    bar [6718.3292243095, 42306.7540825549, 6869.8010595012, 37319.6290235888, 44413.9870445213]
+    bar [6758.1579208241, 39378.9060052304, 7322.6316946076, 37045.2145583096, 41340.3074537667]
     bar [0, 0, 0, 0, 0, 0]
 ```
 
-The estimated throughputs are 6718, 42307, 6870, 37320, 44414 5-day patch time series per 3 days of computation (maximum job run time at CSC Puhti). The highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying or optionay unzipping the Zarr or zipped Zarr to local NVMe in the beginning of the training run.
+The estimated throughputs are 6758.1579208241, 39379, 7323, 37045, 41340 5-day patch time series per 3 days of computation (maximum job run time at CSC Puhti). The highest throughputs are obtained by storing Zarr or zipped Zarrs in Allas S3, and copying or optionay unzipping the Zarr or zipped Zarr to local NVMe in the beginning of the training run.
 
 The zipped Zarr results in the above were obtained using a custom async fsspec file system for the files in a zip located in another async fsspec file system. This reduced load times three-fold compared to using the ZipStore of zarr 3.0.7 based on sync ZipFile. Because choosing between Zarr and zipped Zarr is hot topic and zipped Zarr v3 [might also be](https://cpm.pages.eopf.copernicus.eu/eopf-cpm/main/PSFD/4-storage-formats.html) ESA's future dissemination format for satellite images, I advertised the solution in a few places, [in a discussion](https://github.com/zarr-developers/zarr-python/discussions/1613) in the Zarr Python repo on zipped Zarr and S3, in [Pangeo Discourse](https://discourse.pangeo.io/t/whats-the-best-file-format-to-chose-for-raster-imagery-and-masks-products/4555), and in [an issue](https://github.com/csaybar/ESA-zar-zip-decision/issues/6) on a position piece opposing zipping of Zarrs for satellite image dissemination.
 
@@ -730,6 +730,8 @@ The times in seconds were: Allas S3 Zarr: 7.53, Allas S3 zipped Zarr: 23.9, NVMe
 
 ### Zarr and async zipped Zarr patch time series load time, Zarr time chunk sizes 20, 40, 80 (May 19, 2025)
 
+This benchmark result was obtained after switching to a custom async filesystem for reading zip contents. Also, Zarr stores in the benchmark were made persistent to remove the overhead opening a zipped Zarr.
+
 ```mermaid
 ---
 config:
@@ -754,13 +756,13 @@ xychart-beta
     title "Sentinel 2 L1C patch time series — CSC Puhti compute node"
     x-axis ["Allas S3 Zarr", "Allas S3 zipped Zarr (async)", "NVMe Zarr", "NVMe zipped Zarr (async)"]
     y-axis "Mean load time (s)" 0 --> 8
-    bar [7.716204173564911, 7.546070046424866, 1.1104609894752502, 1.3312029433250427]
+    bar [7.670729303359986, 7.079422011375427, 1.1930245089530944, 1.3410639023780824]
     bar [0, 0, 0, 0]
 ```
 
-The times in seconds were: Allas S3 Zarr: 7.72, Allas S3 zipped Zarr (async): 7.54, NVMe Zarr: 1.11, NVMe zipped Zarr (async): 1.33.
+The times in seconds were: Allas S3 Zarr: 7.67, Allas S3 zipped Zarr (async): 7.08, NVMe Zarr: 1.19, NVMe zipped Zarr (async): 1.34.
 
-After obtaining these results, the Zarr stores in the benchmark were made persistent to reduce overhead with zipped Zarr. Zarr time label chunk size, which was found to be 1 by default (due to appending single images to the store) was also increased. No results are available yet for these changes.
+After the last benchmark run, Zarr time label chunk size, which was found to be 1 by default (due to appending single images to the store) was also increased. No results are available yet for this change.
 
 ## Authors
 
