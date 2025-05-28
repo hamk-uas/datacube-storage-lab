@@ -240,6 +240,7 @@ The standard workflow consists of of the following steps:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE mb s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET
     ```
     Or, if you have the buckets already, empty them before updating the data: (WARNING: destructive action)
+    ```shell
     # Empty the network safe bucket
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE del -rf s3://$DSLAB_S2L1C_S3_SAFE_BUCKET
     # Empty the network cog bucket
@@ -248,6 +249,7 @@ The standard workflow consists of of the following steps:
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE del -rf s3://$DSLAB_S2L1C_S3_ZARR_BUCKET
     # Empty the network zipzarr bucket
     s3cmd -c ~/.$DSLAB_S2L1C_S3_PROFILE del -rf s3://$DSLAB_S2L1C_S3_ZIPZARR_BUCKET
+    ```
 5. Manually copy the data to the S3 buckets and make them public: (slow, up to a few hours; under 2 hours for Zarr and under 1 hour for zipped Zarr from HAMK network)
     ```shell
     # Copy network safe to s3 safe
